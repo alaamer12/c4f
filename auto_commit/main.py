@@ -586,10 +586,10 @@ def exit_with_no_changes():
 def process_change_group(group):
     message = generate_commit_message(group)
     display_commit_preview(message)
-    response = input("Proceed with commit? (Y/n/e to edit): ").lower()
-    while response not in ["y", "n", "e"]:
+    response = input("Proceed with commit? (Y/n/e to edit): ").lower().strip()
+    while response not in ["y", "n", "e", ""]:
         response = input("Invalid response. Proceed with commit? (Y/n/e to edit): ").lower()
-    if response == "y":
+    if response == "y" or response == "":
         commit_changes([str(change.path) for change in group], message)
     elif response == "n":
         console.print("[yellow]Skipping these changes...[/yellow]")
