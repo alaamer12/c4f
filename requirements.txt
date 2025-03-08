@@ -1,0 +1,6 @@
+g4f
+rich
+pytest
+pytest-asyncio
+pytest-mock
+gitpython
