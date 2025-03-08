@@ -1,4 +1,46 @@
 #!/usr/bin/env python3
+"""
+Auto-Commit: An Intelligent Git Commit Message Generator
+
+This module provides an automated solution for generating meaningful Git commit messages
+based on the changes in your repository. It analyzes file changes, categorizes them by type,
+and generates descriptive commit messages using AI assistance.
+
+Key Features:
+    - Automatic detection of changed, added, and deleted files
+    - Smart categorization of changes (feat, fix, docs, etc.)
+    - AI-powered commit message generation
+    - Interactive commit process with manual override options
+    - Support for both individual and batch commits
+    - Handles binary files, directories, and permission issues gracefully
+
+Usage:
+    Run the script in a Git repository:
+    $ python main.py
+
+    The script will:
+    1. Detect all changes in the repository
+    2. Group related changes together
+    3. Generate commit messages for each group
+    4. Allow user interaction to approve, edit, or skip commits
+    5. Commit the changes with the generated/edited messages
+
+Commands:
+    - [Y/Enter]: Accept and commit changes
+    - [n]: Skip these changes
+    - [e]: Edit the commit message
+    - [a/all]: Accept all remaining commits without prompting
+
+Dependencies:
+    - g4f: For AI-powered commit message generation
+    - rich: For beautiful terminal output
+    - Python 3.6+: For modern Python features
+
+Author: Alaamer
+License: MIT
+Version: 1.0.0
+"""
+
 import concurrent.futures
 import os
 import re
@@ -162,12 +204,6 @@ def check_script_file(file_path: Path, _: str) -> Optional[str]:
 def check_test_file(file_path: Path, _: str) -> Optional[str]:
     return 'test' if is_test_file(file_path) else None
 
-def check_file_path_patterns(file_path: Path, _: str) -> Optional[str]:
-    return check_file_path_patterns(file_path)
-
-def check_diff_patterns(_: Path, diff: str) -> Optional[str]:
-    return check_diff_patterns(diff)
-
 
 def is_test_file(file_path: Path) -> bool:
     """Check if the file is in a dedicated test directory."""
@@ -175,7 +211,7 @@ def is_test_file(file_path: Path) -> bool:
     return any(part.lower() in test_indicators for part in file_path.parts)
 
 
-def check_file_path_patterns(file_path: Path) -> Optional[str]:
+def check_file_path_patterns(file_path: Path, _: str) -> Optional[str]:
     """Check file name patterns to determine file type."""
     # Enhanced patterns based on conventional commits and industry standards
     type_patterns = {
@@ -194,7 +230,7 @@ def check_file_path_patterns(file_path: Path) -> Optional[str]:
     return check_patterns(str(file_path), type_patterns)
 
 
-def check_diff_patterns(diff: str) -> Optional[str]:
+def check_diff_patterns(diff: str, _: str) -> Optional[str]:
     """Check diff content patterns to determine file type."""
     # Enhanced patterns for detecting commit types from diff content
     diff_patterns = {
@@ -208,7 +244,7 @@ def check_diff_patterns(diff: str) -> Optional[str]:
         "chore": r"\bchore|\bupdate dependencies|\bupgrade|\bdowngrade|\bpackage|\bbump version|\brelease|\btag|\bversion|\bdeployment|\bci|\bcd|\bpipeline|\bworkflow|\bautomation|\bscripting|\bconfiguration|\bsetup|\bmaintenance|\bcleanup|\bupkeep|\borganize|\btrack|\bmonitor",
         "security": r"\bsecurity|\bvulnerability|\bcve|\bauth|\bauthentication|\bauthorization|\baccess control|\bpermission|\bprivilege|\bvalidation|\bsanitization|\bencryption|\bdecryption|\bhashing|\bcipher|\btoken|\bsession|\bxss|\bsql injection|\bcsrf|\bcors|\bfirewall|\bwaf|\bpen test|\bpenetration test|\baudit|\bscan|\bdetect|\bprotect|\bprevent|\bmitigate|\bremedy|\bfix|\bpatch|\bupdate|\bsecure|\bharden|\bfortify|\bsafeguard|\bshield|\bguard|\bblock|\bfilter|\bscreen|\bcheck|\bverify|\bvalidate|\bconfirm|\bensure|\bensure|\btrustworthy|\breliable|\brobust|\bresilient|\bimmune|\bimpervious|\binvulnerable"
     }
-    return check_patterns(diff.lower(), diff_patterns)
+    return check_patterns(str(diff).lower(), diff_patterns)
 
 
 def check_patterns(text: str, patterns: dict) -> Optional[str]:
