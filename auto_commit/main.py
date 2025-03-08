@@ -183,10 +183,8 @@ def group_related_changes(changes: List[FileChange]) -> List[List[FileChange]]:
 def generate_commit_message(changes: List[FileChange]) -> str:
     combined_context = create_combined_context(changes)
     total_diff_lines = calculate_total_diff_lines(changes)
-    is_comprehensive = total_diff_lines >= PROMPT_THRESHOLD
-    diffs_summary = generate_diff_summary(changes) if is_comprehensive else ""
-
-    tool_calls = determine_tool_calls(is_comprehensive, combined_context, diffs_summary)
+    is_comprehensive, prompt = determine_prompt(combined_context, changes, total_diff_lines)
+    tool_calls = determine_tool_calls(is_comprehensive, combined_context, generate_diff_summary(changes) if is_comprehensive else "")
 
     for _ in range(ATTEMPT):
         message = attempt_generate_message(combined_context, tool_calls, changes, total_diff_lines)
@@ -206,10 +204,10 @@ def generate_commit_message(changes: List[FileChange]) -> str:
 
 
 def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summary: str = "") -> Dict[str, Any]:
+    """Determine which tool calls to use based on the size of the changes."""
     if is_comprehensive:
         return create_comprehensive_tool_call(combined_text, diffs_summary)
-    else:
-        return create_simple_tool_call(combined_text)
+    return create_simple_tool_call(combined_text)
 
 
 def attempt_generate_message(combined_context: str, tool_calls: Dict[str, Any], changes: List[FileChange],
@@ -273,15 +271,16 @@ def generate_diff_summary(changes):
     ])
 
 
-def determine_prompt(combined_text: str, changes: List[FileChange], diff_lines: int) -> str:
-    # For small changes (less than 50 lines), use a simple inline commit message
-    if diff_lines < PROMPT_THRESHOLD:
-        return generate_simple_prompt(combined_text)
-
-    # For larger changes, create a comprehensive commit message with details
-    diffs_summary = generate_diff_summary(changes)
-
-    return generate_comprehensive_prompt(combined_text, diffs_summary)
+def determine_prompt(combined_text: str, changes: List[FileChange], diff_lines: int) -> Tuple[bool, str]:
+    """Determine which prompt to use based on the size of the changes."""
+    console.print(f"Total diff lines: {diff_lines}", style="blue")
+    is_comprehensive = diff_lines > PROMPT_THRESHOLD
+    console.print(f"Using {'comprehensive' if is_comprehensive else 'simple'} prompt", style="blue")
+    
+    if is_comprehensive:
+        diffs_summary = generate_diff_summary(changes)
+        return is_comprehensive, generate_comprehensive_prompt(combined_text, diffs_summary)
+    return is_comprehensive, generate_simple_prompt(combined_text)
 
 
 def generate_simple_prompt(combined_text):
