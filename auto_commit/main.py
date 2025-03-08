@@ -73,6 +73,17 @@ def parse_git_status() -> List[Tuple[str, str]]:
 
 def get_file_diff(file_path: str) -> str:
     console.print(f"Getting diff for {file_path}...", style="blue")
+    # For untracked files, we need to get their entire content
+    stdout, stderr, code = run_git_command(["git", "status", "--porcelain", file_path])
+    if code == 0 and stdout.startswith("??"):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            console.print(f"[red]Error reading file {file_path}:[/red] {e}", style="bold red")
+            return ""
+
+    # For tracked files, get the diff
     stdout, _, code = run_git_command(["git", "diff", "--cached", "--", file_path])
     if code == 0 and stdout:
         return stdout
@@ -82,15 +93,33 @@ def get_file_diff(file_path: str) -> str:
 
 def analyze_file_type(file_path: Path, diff: str) -> str:
     """Determine the type of change based on file path and diff content."""
+    # Check for Python files
+    if file_path.suffix == '.py':
+        if 'test' in str(file_path).lower():
+            return 'test'
+        return 'feat'  # Default for Python files
+        
+    # Check for documentation files
+    if file_path.suffix in ['.md', '.rst', '.txt']:
+        return 'docs'
+        
+    # Check for configuration files
+    if file_path.name in ['.gitignore', 'requirements.txt', 'setup.py', 'setup.cfg', 'pyproject.toml']:
+        return 'chore'
+        
+    # Check other patterns
     type_checks = [
         ("chore", lambda: "scripts" in file_path.parts),
         ("test", lambda: is_test_file(file_path)),
         (check_file_path_patterns(file_path), lambda: True),
         (check_diff_patterns(diff), lambda: True),
-        ("feat", lambda: True)  # Default case
     ]
 
-    return next(_type for _type, condition in type_checks if condition())
+    for _type, condition in type_checks:
+        if _type and condition():
+            return _type
+
+    return "feat"  # Default case if no other type matches
 
 
 def is_test_file(file_path: Path) -> bool:
