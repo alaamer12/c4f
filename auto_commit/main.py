@@ -689,21 +689,21 @@ def get_valid_user_response() -> str:
         prompt = "Invalid response. " + prompt
 
 def handle_user_response(response: str, group: List[FileChange], message: str) -> bool:
-    if response in ["a", "all"]:
-        return do_group_commit(group, message, True)
-    elif response in ["y", ""]:
-        do_group_commit(group, message)
-        return False
-    elif response == "n":
-        console.print("[yellow]Skipping these changes...[/yellow]")
-        return False
-    elif response == "e":
-        new_message = input("Enter new commit message: ")
-        do_group_commit(group, new_message)
-        return False
-    else:
+    actions = {
+        "a": lambda: do_group_commit(group, message, True),
+        "all": lambda: do_group_commit(group, message, True),
+        "y": lambda: do_group_commit(group, message),
+        "": lambda: do_group_commit(group, message),
+        "n": lambda: console.print("[yellow]Skipping these changes...[/yellow]"),
+        "e": lambda: do_group_commit(group, input("Enter new commit message: "))
+    }
+
+    if response not in actions:
         console.print("[red]Invalid response. Exiting...[/red]")
         sys.exit(1)
+
+    actions[response]()
+    return True if response in ["a", "all"] else False
 
 def do_group_commit(group: List[FileChange], message: str, accept_all: bool = False) -> bool:
     """Commit a group of changes and return whether to accept all future commits."""
