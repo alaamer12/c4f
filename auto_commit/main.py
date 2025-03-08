@@ -62,7 +62,10 @@ def parse_git_status() -> List[Tuple[str, str]]:
         if not line.strip():
             continue
         status, file_path = line[:2].strip(), line[3:].strip()
-        if status == "R":
+        # Handle untracked files (marked as '??')
+        if status == "??":
+            status = "A"  # Treat untracked as new/added files
+        elif status == "R":
             file_path = file_path.split(" -> ")[1]
         changes.append((status, file_path))
     return changes
@@ -110,7 +113,7 @@ def check_file_path_patterns(file_path: Path) -> Optional[str]:
         "feat": r"^src/|^app/|^lib/|^modules/|^feature/|^features/|^api/|^services/|^controllers/|^routes/|^middleware/|^models/|^schemas/|^types/|^utils/|^helpers/|^core/|^internal/|^pkg/|^cmd/",
         "fix": r"^hotfix/|^bugfix/|^patch/|^fix/",
         "refactor": r"^refactor/|^refactoring/|^redesign/",
-        "security": r"^security/|^auth/|^authentication/|^authorization/|^permissions/|^rbac/|^oauth/|^jwt/|^crypto/|^ssl/|^tls/|^ssh/"
+        "security": r"^security/|^auth/|^authentication/|^authorization/|^access control/|^permission/|^privilege/|^validation/|^sanitization/|^encryption/|^decryption/|^hashing/|^cipher/|^token/|^session/|^xss/|^sql injection/|^csrf/|^cors/|^firewall/|^waf/|^pen test/|^penetration test/|^audit/|^scan/|^detect/|^protect/|^prevent/|^mitigate/|^remedy/|^fix/|^patch/|^update/|^secure/|^harden/|^fortify/|^safeguard/|^shield/|^guard/|^block/|^filter/|^screen/|^check/|^verify/|^validate/|^confirm/|^ensure/|^ensure/|^trustworthy/|^reliable/|^robust/|^resilient/|^immune/|^impervious/|^invulnerable"
     }
     return check_patterns(str(file_path), type_patterns)
 
