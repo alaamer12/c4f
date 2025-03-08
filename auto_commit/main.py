@@ -73,17 +73,47 @@ def parse_git_status() -> List[Tuple[str, str]]:
 
 def get_file_diff(file_path: str) -> str:
     console.print(f"Getting diff for {file_path}...", style="blue")
-    # For untracked files, we need to get their entire content
-    stdout, stderr, code = run_git_command(["git", "status", "--porcelain", file_path])
-    if code == 0 and stdout.startswith("??"):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            console.print(f"[red]Error reading file {file_path}:[/red] {e}", style="bold red")
-            return ""
+    path = Path(file_path)
+    
+    if path.is_dir():
+        return handle_directory(file_path)
+    
+    if is_untracked(file_path):
+        return handle_untracked_file(path)
+    
+    return get_tracked_file_diff(file_path)
 
-    # For tracked files, get the diff
+def handle_directory(file_path: str) -> str:
+    return f"Directory: {file_path}"
+
+def is_untracked(file_path: str) -> bool:
+    stdout, _, code = run_git_command(["git", "status", "--porcelain", file_path])
+    return code == 0 and stdout.startswith("??")
+
+def handle_untracked_file(path: Path) -> str:
+    if not path.exists():
+        return f"File not found: {path}"
+    if not os.access(path, os.R_OK):
+        return f"Permission denied: {path}"
+    
+    try:
+        return read_file_content(path)
+    except Exception as e:
+        console.print(f"[red]Error reading file {path}:[/red] {e}", style="bold red")
+        return f"Error: {str(e)}"
+
+def read_file_content(path: Path) -> str:
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read(1024)
+            if '\0' in content:
+                return f"Binary file: {path}"
+            f.seek(0)
+            return f.read()
+    except UnicodeDecodeError:
+        return f"Binary file: {path}"
+
+def get_tracked_file_diff(file_path: str) -> str:
     stdout, _, code = run_git_command(["git", "diff", "--cached", "--", file_path])
     if code == 0 and stdout:
         return stdout
@@ -93,33 +123,50 @@ def get_file_diff(file_path: str) -> str:
 
 def analyze_file_type(file_path: Path, diff: str) -> str:
     """Determine the type of change based on file path and diff content."""
-    # Check for Python files
-    if file_path.suffix == '.py':
-        if 'test' in str(file_path).lower():
-            return 'test'
-        return 'feat'  # Default for Python files
-        
-    # Check for documentation files
-    if file_path.suffix in ['.md', '.rst', '.txt']:
-        return 'docs'
-        
-    # Check for configuration files
-    if file_path.name in ['.gitignore', 'requirements.txt', 'setup.py', 'setup.cfg', 'pyproject.toml']:
-        return 'chore'
-        
-    # Check other patterns
-    type_checks = [
-        ("chore", lambda: "scripts" in file_path.parts),
-        ("test", lambda: is_test_file(file_path)),
-        (check_file_path_patterns(file_path), lambda: True),
-        (check_diff_patterns(diff), lambda: True),
+    file_type_checks = [
+        check_python_file,
+        check_documentation_file,
+        check_configuration_file,
+        check_script_file,
+        check_test_file,
+        check_file_path_patterns,
+        check_diff_patterns,
     ]
 
-    for _type, condition in type_checks:
-        if _type and condition():
-            return _type
+    for check in file_type_checks:
+        result = check(file_path, diff)
+        if result:
+            return result
 
     return "feat"  # Default case if no other type matches
+
+def check_python_file(file_path: Path, _: str) -> Optional[str]:
+    if file_path.suffix == '.py':
+        return 'test' if 'test' in str(file_path).lower() else 'feat'
+    return None
+
+def check_documentation_file(file_path: Path, _: str) -> Optional[str]:
+    if file_path.suffix in ['.md', '.rst', '.txt']:
+        return 'docs'
+    return None
+
+def check_configuration_file(file_path: Path, _: str) -> Optional[str]:
+    config_files = ['.gitignore', 'requirements.txt', 'setup.py', 'setup.cfg', 'pyproject.toml']
+    if file_path.name in config_files:
+        return 'chore'
+    return None
+
+def check_script_file(file_path: Path, _: str) -> Optional[str]:
+    return 'chore' if "scripts" in file_path.parts else None
+
+def check_test_file(file_path: Path, _: str) -> Optional[str]:
+    return 'test' if is_test_file(file_path) else None
+
+def check_file_path_patterns(file_path: Path, _: str) -> Optional[str]:
+    return check_file_path_patterns(file_path)
+
+def check_diff_patterns(_: Path, diff: str) -> Optional[str]:
+    return check_diff_patterns(diff)
 
 
 def is_test_file(file_path: Path) -> bool:
@@ -423,31 +470,35 @@ def handle_error(error: Exception) -> None:
 
 
 def commit_changes(files: List[str], message: str):
+    """Commit the changes to the specified files with the given message."""
     with Progress(
-            "[progress.description]{task.description}",
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
     ) as progress:
+        # Stage files
         stage_files(files, progress)
-        commit_result = perform_commit(message, progress)
+        
+        # Commit changes
+        commit_result = do_commit(message, progress)
+        
+        # Display result
+        display_commit_result(commit_result, message)
 
-    display_commit_result(commit_result, message)
-
+def do_commit(message: str, progress: Progress) -> Tuple[str, int]:
+    """Perform the actual git commit."""
+    task = progress.add_task("Committing changes...", total=1)
+    stdout, _, code = run_git_command(["git", "commit", "-m", message])
+    progress.update(task, advance=1)
+    return stdout, code
 
 def stage_files(files: List[str], progress: Progress):
     stage_task = progress.add_task("Staging files...", total=len(files))
     for file_path in files:
         run_git_command(["git", "add", "--", file_path])
         progress.advance(stage_task)
-
-
-def perform_commit(message: str, progress: Progress) -> Tuple[str, int]:
-    commit_task = progress.add_task("Committing changes...", total=1)
-    _, stderr, code = run_git_command(["git", "commit", "-m", message])
-    progress.advance(commit_task)
-    return stderr, code
-
 
 def display_commit_result(result: Tuple[str, int], message: str):
     stderr, code = result
@@ -474,20 +525,20 @@ def format_time_ago(timestamp: float) -> str:
     if timestamp == 0:
         return "N/A"
 
-    now = datetime.now().timestamp()
-    diff = now - timestamp
+    diff = datetime.now().timestamp() - timestamp
+    time_units = [
+        (86400, "d"),
+        (3600, "h"),
+        (60, "m"),
+        (0, "just now")
+    ]
 
-    if diff < 60:
-        return "just now"
-    elif diff < 3600:
-        minutes = int(diff / 60)
-        return f"{minutes}m ago"
-    elif diff < 86400:
-        hours = int(diff / 3600)
-        return f"{hours}h ago"
-    else:
-        days = int(diff / 86400)
-        return f"{days}d ago"
+    for seconds, unit in time_units:
+        if diff >= seconds:
+            if seconds == 0:
+                return unit
+            count = int(diff / seconds)
+            return f"{count}{unit} ago"
 
 
 def create_staged_table() -> Table:
@@ -619,32 +670,46 @@ def exit_with_no_changes():
     sys.exit(0)
 
 
-def process_change_group(group, accept_all=False):
+def process_change_group(group: List[FileChange], accept_all: bool = False) -> bool:
     message = generate_commit_message(group)
     display_commit_preview(message)
     
     if accept_all:
-        commit_changes([str(change.path) for change in group], message)
-        return True
-        
-    response = input("Proceed with commit? ([Y/n] [/e] to edit [all/a] for accept all): ").lower().strip()
-    while response not in ["y", "n", "e", "a", "all", ""]:
-        response = input("Invalid response. Proceed with commit? (Y/n/e to edit/a for accept all): ").lower().strip()
+        return do_group_commit(group, message, True)
     
+    response = get_valid_user_response()
+    return handle_user_response(response, group, message)
+
+def get_valid_user_response() -> str:
+    prompt = "Proceed with commit? ([Y/n] [/e] to edit [all/a] for accept all): "
+    while True:
+        response = input(prompt).lower().strip()
+        if response in ["y", "n", "e", "a", "all", ""]:
+            return response
+        prompt = "Invalid response. " + prompt
+
+def handle_user_response(response: str, group: List[FileChange], message: str) -> bool:
     if response in ["a", "all"]:
-        commit_changes([str(change.path) for change in group], message)
-        return True  # Signal to accept all future commits
-    elif response == "y" or response == "":
-        commit_changes([str(change.path) for change in group], message)
+        return do_group_commit(group, message, True)
+    elif response in ["y", ""]:
+        do_group_commit(group, message)
+        return False
     elif response == "n":
         console.print("[yellow]Skipping these changes...[/yellow]")
+        return False
     elif response == "e":
-        message = input("Enter new commit message: ")
-        commit_changes([str(change.path) for change in group], message)
+        new_message = input("Enter new commit message: ")
+        do_group_commit(group, new_message)
+        return False
     else:
-        console.print("[red]Something went wrong. Exiting...[/red]")
+        console.print("[red]Invalid response. Exiting...[/red]")
         sys.exit(1)
-    return False  # Continue with normal prompting
+
+def do_group_commit(group: List[FileChange], message: str, accept_all: bool = False) -> bool:
+    """Commit a group of changes and return whether to accept all future commits."""
+    files = [str(change.path) for change in group]
+    commit_changes(files, message)
+    return accept_all
 
 
 def display_commit_preview(message):
