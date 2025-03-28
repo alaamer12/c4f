@@ -54,8 +54,10 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Union, Literal, Dict, Any
 import contextlib
 
+from rich.markdown import Markdown
+
 # Suppress g4f update messages by temporarily redirecting stderr
-with contextlib.redirect_stderr(open(os.devnull, 'w')):
+with contextlib.redirect_stdout(open(os.devnull, 'w')):
     import g4f
     from g4f.client import Client
 
@@ -81,7 +83,7 @@ DIFF_MAX_LENGTH = 100
 @dataclass
 class FileChange:
     path: Path
-    status: str  # 'M' (modified), 'A' (added), 'D' (deleted), 'R' (renamed)
+    status: Literal["M", "A", "D", "R"]  # type:   # 'M' (modified), 'A' (added), 'D' (deleted), 'R' (renamed)
     diff: str
     type: Optional[str] = None  # 'feat', 'fix', 'docs', etc.
     diff_lines: int = 0
@@ -292,7 +294,8 @@ def generate_commit_message(changes: List[FileChange]) -> str:
     tool_calls = determine_tool_calls(is_comprehensive, combined_context, diffs_summary)
 
     for _ in range(ATTEMPT):
-        message = attempt_generate_message(combined_context, tool_calls, changes, total_diff_lines)
+        message = get_formatted_message(combined_context, tool_calls, changes, total_diff_lines)
+
         if not message:
             continue
 
@@ -307,7 +310,94 @@ def generate_commit_message(changes: List[FileChange]) -> str:
 
     return generate_fallback_message(changes)
 
+def get_formatted_message(combined_context, tool_calls, changes, total_diff_lines):
+    # Attempt to get Message
+    message = attempt_generate_message(combined_context, tool_calls, changes, total_diff_lines)
 
+    # Purify Message
+    message = purify_message(message)
+
+    return message
+def purify_batrick(message: str) -> str:
+    if message.startswith("```") and message.endswith("```"):
+        # Check if there's a language specifier like ```git or ```commit
+        lines = message.split("\n")
+        if len(lines) > 2:
+            # If first line has just the opening backticks with potential language specifier
+            if lines[0].startswith("```") and len(lines[0]) <= 10:
+                message = "\n".join(lines[1:-1])
+            else:
+                message = message[3:-3]
+        else:
+            message = message[3:-3]
+
+    return message
+
+def purify_commit_message_introduction(message: str) -> str:
+    prefixes_to_remove = [
+        "commit message:", "commit:", "git commit message:",
+        "suggested commit message:", "here's a commit message:",
+        "here is the commit message:", "here is a commit message:"
+    ]
+
+    for prefix in prefixes_to_remove:
+        if message.lower().startswith(prefix):
+            message = message[len(prefix):].strip()
+
+    return message
+
+def purify_explantory_message(message: str) -> str:
+    explanatory_markers = [
+        "explanation:", "explanation of changes:", "note:", "notes:",
+        "this commit message", "i hope this helps", "please let me know"
+    ]
+
+    for marker in explanatory_markers:
+        if marker in message.lower():
+            parts = message.lower().split(marker)
+            message = parts[0].strip()
+
+    return message
+
+def purify_htmlxml(message: str) -> str:
+    return re.sub(r'<[^>]+>', '', message)
+
+def purify_disclaimers(message: str) -> str:
+    lines = message.strip().split('\n')
+    filtered_lines = []
+    for line in lines:
+        if any(x in line.lower() for x in
+               ["let me know if", "please review", "is this helpful", "hope this", "i've followed"]):
+            break
+        filtered_lines.append(line)
+
+    return '\n'.join(filtered_lines).strip()
+
+
+def purify_message(message: Optional[str]) -> Optional[str]:
+    """Clean up the message from the chatbot to ensure it's a proper commit message."""
+    if not message:
+        return None
+
+    # Remove code blocks with backticks
+    message = purify_batrick(message)
+
+    # Remove any "commit message:" or similar prefixes
+    message = purify_commit_message_introduction(message)
+
+    # Remove any explanatory text after the commit message
+    message = purify_explantory_message(message)
+
+    # Remove any HTML/XML tags
+    message = purify_htmlxml(message)
+
+    # Remove any trailing disclaimers or instructions
+    message = purify_disclaimers(message)
+
+    # Normalize whitespace and remove excess blank lines
+    message = re.sub(r'\n{3,}', '\n\n', message)
+
+    return message
 def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summary: str = "") -> Dict[str, Any]:
     if is_comprehensive:
         return create_comprehensive_tool_call(combined_text, diffs_summary)
@@ -730,13 +820,22 @@ def exit_with_no_changes():
     sys.exit(0)
 
 
-def process_change_group(group: List[FileChange], accept_all: bool = False) -> bool:
+def process_change_group(group: List["FileChange"], accept_all: bool = False) -> bool:
     message = generate_commit_message(group)
-    display_commit_preview(message)
-    
+
+    # Style Message
+    md = Markdown(message)
+
+    # Capture the rendered Markdown output
+    with console.capture() as capture:
+        console.print(md, end="")  # Ensure no extra newline
+    rendered_message = capture.get()
+
+    display_commit_preview(rendered_message)  # Pass the properly rendered string
+
     if accept_all:
         return do_group_commit(group, message, True)
-    
+
     response = get_valid_user_response()
     return handle_user_response(response, group, message)
 

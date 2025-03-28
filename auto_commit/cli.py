@@ -23,8 +23,12 @@ import os
 import sys
 from pathlib import Path
 from typing import Optional
+import contextlib
 
-import g4f
+# Suppress g4f update messages by temporarily redirecting stderr
+with contextlib.redirect_stderr(open(os.devnull, 'w')):
+    import g4f
+
 from rich.console import Console
 
 from . import main
