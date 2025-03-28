@@ -52,9 +52,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Optional, Union, Literal, Dict, Any
+import contextlib
 
-import g4f
-from g4f.client import Client
+# Suppress g4f update messages by temporarily redirecting stderr
+with contextlib.redirect_stderr(open(os.devnull, 'w')):
+    import g4f
+    from g4f.client import Client
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -71,6 +75,7 @@ MIN_COMPREHENSIVE_LENGTH = 50  # minimum length for comprehensive commit message
 ATTEMPT = 3  # number of attempts
 MODEL_TYPE = Union[g4f.Model, g4f.models, str]
 MODEL: MODEL_TYPE = g4f.models.gpt_4o_mini
+DIFF_MAX_LENGTH = 100
 
 
 @dataclass
@@ -103,7 +108,7 @@ def parse_git_status() -> List[Tuple[str, str]]:
     for line in stdout.splitlines():
         if not line.strip():
             continue
-        status, file_path = line[:2].strip(), line[3:].strip()
+        status, file_path = line[:2].strip(), line[2:].strip()
         # Handle untracked files (marked as '??')
         if status == "??":
             status = "A"  # Treat untracked as new/added files
@@ -124,6 +129,21 @@ def get_file_diff(file_path: str) -> str:
         return handle_untracked_file(path)
     
     return get_tracked_file_diff(file_path)
+
+def shorten_diff(diff: str) -> str:
+    lines = diff.strip().splitlines()
+
+    if len(lines) > DIFF_MAX_LENGTH:
+        lines = lines[:DIFF_MAX_LENGTH] + ["\n...\n\n"]
+
+    return "\n".join(lines)
+
+def get_tracked_file_diff(file_path: str) -> str:
+    stdout, _, code = run_git_command(["git", "diff", "--cached", "--", file_path])
+    if code == 0 and stdout:
+        return stdout
+    stdout, _, code = run_git_command(["git", "diff", "--", file_path])
+    return stdout if code == 0 else ""
 
 def handle_directory(file_path: str) -> str:
     return f"Directory: {file_path}"
@@ -155,12 +175,7 @@ def read_file_content(path: Path) -> str:
     except UnicodeDecodeError:
         return f"Binary file: {path}"
 
-def get_tracked_file_diff(file_path: str) -> str:
-    stdout, _, code = run_git_command(["git", "diff", "--cached", "--", file_path])
-    if code == 0 and stdout:
-        return stdout
-    stdout, _, code = run_git_command(["git", "diff", "--", file_path])
-    return stdout if code == 0 else ""
+
 
 
 def analyze_file_type(file_path: Path, diff: str) -> str:
@@ -214,7 +229,18 @@ def is_test_file(file_path: Path) -> bool:
 def check_file_path_patterns(file_path: Path, _: str) -> Optional[str]:
     """Check file name patterns to determine file type."""
     # Enhanced patterns based on conventional commits and industry standards
-    type_patterns = {
+    type_patterns = get_test_patterns()
+    return check_patterns(str(file_path), type_patterns)
+
+
+def check_diff_patterns(diff: str, _: str) -> Optional[str]:
+    """Check diff content patterns to determine file type."""
+    # Enhanced patterns for detecting commit types from diff content
+    diff_patterns = get_diff_patterns()
+    return check_patterns(str(diff).lower(), diff_patterns)
+
+def get_test_patterns() -> dict[str, str]:
+    return {
         "test": r"^tests?/|^testing/|^__tests?__/|^test_.*\.py$|^.*_test\.py$|^.*\.spec\.[jt]s$|^.*\.test\.[jt]s$",
         "docs": r"^docs?/|\.md$|\.rst$|\.adoc$|\.txt$|^(README|CHANGELOG|CONTRIBUTING|HISTORY|AUTHORS|SECURITY)(\.[^/]+)?$|^(COPYING|LICENSE)(\.[^/]+)?$|^(api|docs|documentation)/|.*\.docstring$|^jsdoc/|^typedoc/",
         "style": r"\.(css|scss|sass|less|styl)$|^styles?/|^themes?/|\.editorconfig$|\.prettierrc|\.eslintrc|\.flake8$|\.style\.yapf$|\.isort\.cfg$|setup\.cfg$|^\.stylelintrc|^\.prettierrc|^\.prettier\.config\.[jt]s$",
@@ -227,25 +253,19 @@ def check_file_path_patterns(file_path: Path, _: str) -> Optional[str]:
         "refactor": r"^refactor/|^refactoring/|^redesign/",
         "security": r"^security/|^auth/|^authentication/|^authorization/|^access control/|^permission/|^privilege/|^validation/|^sanitization/|^encryption/|^decryption/|^hashing/|^cipher/|^token/|^session/|^xss/|^sql injection/|^csrf/|^cors/|^firewall/|^waf/|^pen test/|^penetration test/|^audit/|^scan/|^detect/|^protect/|^prevent/|^mitigate/|^remedy/|^fix/|^patch/|^update/|^secure/|^harden/|^fortify/|^safeguard/|^shield/|^guard/|^block/|^filter/|^screen/|^check/|^verify/|^validate/|^confirm/|^ensure/|^ensure/|^trustworthy/|^reliable/|^robust/|^resilient/|^immune/|^impervious/|^invulnerable"
     }
-    return check_patterns(str(file_path), type_patterns)
 
-
-def check_diff_patterns(diff: str, _: str) -> Optional[str]:
-    """Check diff content patterns to determine file type."""
-    # Enhanced patterns for detecting commit types from diff content
-    diff_patterns = {
+def get_diff_patterns() -> dict[str, str]:
+    return {
         "test": r"\bdef test_|\bclass Test|\@pytest|\bunittest|\@test\b|\bit\(['\"]\w+['\"]|describe\(['\"]\w+['\"]|\bexpect\(|\bshould\b|\.spec\.|\.test\.|mock|stub|spy|assert|verify",
         "fix": r"\bfix|\bbug|\bissue|\berror|\bcrash|resolve|closes?\s+#\d+|\bpatch|\bsolve|\baddress|\bfailing|\bbroken|\bregression",
         "refactor": r"\brefactor|\bclean|\bmove|\brename|\brestructure|\brewrite|\bimprove|\bsimplify|\boptimize|\breorganize|\benhance|\bupdate|\bmodernize|\bsimplify|\streamline",
         "perf": r"\boptimiz|\bperformance|\bspeed|\bmemory|\bcpu|\bruntime|\bcache|\bfaster|\bslower|\blatency|\bthroughput|\bresponse time|\befficiency|\bbenchmark|\bprofile|\bmeasure|\bmetric|\bmonitoring",
         "style": r"\bstyle|\bformat|\blint|\bprettier|\beslint|\bindent|\bspacing|\bwhitespace|\btabs|\bspaces|\bsemicolons|\bcommas|\bbraces|\bparens|\bquotes|\bsyntax|\btypo|\bspelling|\bgrammar|\bpunctuation",
         "feat": r"\badd|\bnew|\bfeature|\bimplement|\bsupport|\bintroduce|\benable|\bcreate|\ballow|\bfunctionality",
-        "docs": r"\bdocument|\bcomment|\bexplain|\bclari|\bupdate readme|\bupdate changelog|\bupdate license|\bupdate contribution|\bjsdoc|\btypedoc|\bdocstring|\bjavadoc|\bapidoc|\bswagger|\bopenapi|\bdocs",
+        "docs": r"\bupdate(d)?\s*README\.md|\bupdate(d)? readme|\bdocument|\bcomment|\bexplain|\bclari|\bupdate changelog|\bupdate license|\bupdate contribution|\bjsdoc|\btypedoc|\bdocstring|\bjavadoc|\bapidoc|\bswagger|\bopenapi|\bdocs",
+        "security": r"\bsecurity|\bvulnerability|\bcve|\bauth|\bauthentication|\bauthorization|\baccess control|\bpermission|\bprivilege|\bvalidation|\bsanitization|\bencryption|\bdecryption|\bhashing|\bcipher|\btoken|\bsession|\bxss|\bsql injection|\bcsrf|\bcors|\bfirewall|\bwaf|\bpen test|\bpenetration test|\baudit|\bscan|\bdetect|\bprotect|\bprevent|\bmitigate|\bremedy|\bfix|\bpatch|\bupdate (?!UI|design)|\bsecure|\bharden|\bfortify|\bsafeguard|\bshield|\bguard|\bblock|\bfilter|\bscreen|\bcheck|\bverify|\bvalidate|\bconfirm|\bensure|\btrustworthy|\breliable|\brobust|\bresilient|\bimmune|\bimpervious|\binvulnerable",
         "chore": r"\bchore|\bupdate dependencies|\bupgrade|\bdowngrade|\bpackage|\bbump version|\brelease|\btag|\bversion|\bdeployment|\bci|\bcd|\bpipeline|\bworkflow|\bautomation|\bscripting|\bconfiguration|\bsetup|\bmaintenance|\bcleanup|\bupkeep|\borganize|\btrack|\bmonitor",
-        "security": r"\bsecurity|\bvulnerability|\bcve|\bauth|\bauthentication|\bauthorization|\baccess control|\bpermission|\bprivilege|\bvalidation|\bsanitization|\bencryption|\bdecryption|\bhashing|\bcipher|\btoken|\bsession|\bxss|\bsql injection|\bcsrf|\bcors|\bfirewall|\bwaf|\bpen test|\bpenetration test|\baudit|\bscan|\bdetect|\bprotect|\bprevent|\bmitigate|\bremedy|\bfix|\bpatch|\bupdate|\bsecure|\bharden|\bfortify|\bsafeguard|\bshield|\bguard|\bblock|\bfilter|\bscreen|\bcheck|\bverify|\bvalidate|\bconfirm|\bensure|\bensure|\btrustworthy|\breliable|\brobust|\bresilient|\bimmune|\bimpervious|\binvulnerable"
     }
-    return check_patterns(str(diff).lower(), diff_patterns)
-
 
 def check_patterns(text: str, patterns: dict) -> Optional[str]:
     """Check if text matches any pattern in the given dictionary."""
@@ -295,6 +315,50 @@ def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summa
         return create_simple_tool_call(combined_text)
 
 
+def create_simple_tool_call(combined_text: str) -> Dict[str, Any]:
+    return {
+        "function": {
+            "name": "generate_commit",
+            "arguments": {
+                "files": combined_text,
+                "style": "conventional",
+                "format": "inline",
+                "max_length": 72,
+                "include_scope": True,
+                "strict_conventional": True
+            }
+        },
+        "type": "function"
+    }
+
+
+def create_comprehensive_tool_call(combined_text: str, diffs_summary: str) -> Dict[str, Any]:
+    return {
+        "function": {
+            "name": "generate_commit",
+            "arguments": {
+                "files": combined_text,
+                "diffs": diffs_summary,
+                "style": "conventional",
+                "format": "detailed",
+                "max_first_line": 72,
+                "include_scope": True,
+                "include_breaking": True,
+                "include_references": True,
+                "sections": [
+                    "summary",
+                    "changes",
+                    "breaking",
+                    "references"
+                ],
+                "strict_conventional": True
+            }
+        },
+        "type": "function"
+    }
+
+
+
 def attempt_generate_message(combined_context: str, tool_calls: Dict[str, Any], changes: List[FileChange],
                              total_diff_lines: int) -> Optional[str]:
     prompt = determine_prompt(combined_context, changes, total_diff_lines)
@@ -307,12 +371,14 @@ def handle_comprehensive_message(message: Optional[str], changes: List[FileChang
         return None
 
     if len(message) < MIN_COMPREHENSIVE_LENGTH:
-        action = handle_short_comprehensive_message(message)
-        if action == "use":
+        action = handle_short_comprehensive_message(message).strip().lower()
+        while action not in ["use", 'u', 'retry', 'r', 'fallback', 'f']:
+            action = input("\nChoose an option between the options above: or leave it empty to use: ").strip()
+        if action in ["use", 'u', ""]:
             return message
-        elif action == "retry":
+        elif action in ["retry", 'r']:
             return "retry"
-        else:
+        elif action in ["fallback", 'f']:
             return generate_fallback_message(changes)
     return message
 
@@ -351,8 +417,8 @@ def generate_fallback_message(changes: List[FileChange]) -> str:
 
 def generate_diff_summary(changes):
     return "\n".join([
-        f"File: {change.path}\nStatus: {change.status}\nChanges:\n{change.diff}\n"
-        for change in changes
+        shorten_diff(f"File [{i + 1}]: {change.path}\nStatus: {change.status}\nChanges:\n{change.diff}\n")
+        for i, change in enumerate(changes)
     ])
 
 
@@ -411,49 +477,6 @@ def model_prompt(prompt: str, tool_calls: Dict[str, Any]) -> str:
     return execute_with_progress(get_model_response, prompt, tool_calls)
 
 
-def create_simple_tool_call(combined_text: str) -> Dict[str, Any]:
-    return {
-        "function": {
-            "name": "generate_commit",
-            "arguments": {
-                "files": combined_text,
-                "style": "conventional",
-                "format": "inline",
-                "max_length": 72,
-                "include_scope": True,
-                "strict_conventional": True
-            }
-        },
-        "type": "function"
-    }
-
-
-def create_comprehensive_tool_call(combined_text: str, diffs_summary: str) -> Dict[str, Any]:
-    return {
-        "function": {
-            "name": "generate_commit",
-            "arguments": {
-                "files": combined_text,
-                "diffs": diffs_summary,
-                "style": "conventional",
-                "format": "detailed",
-                "max_first_line": 72,
-                "include_scope": True,
-                "include_breaking": True,
-                "include_references": True,
-                "sections": [
-                    "summary",
-                    "changes",
-                    "breaking",
-                    "references"
-                ],
-                "strict_conventional": True
-            }
-        },
-        "type": "function"
-    }
-
-
 def get_model_response(prompt: str, tool_calls: Dict[str, Any]) -> Optional[str]:
     try:
         response = client.chat.completions.create(
@@ -492,8 +515,9 @@ def execute_with_timeout(func, progress, task, *args, timeout=FALLBACK_TIMEOUT):
 def process_response(response: Optional[str]) -> Optional[str]:
     if not response:
         return None
-    message = response.strip().split("\n")[0] if '\n' in response else response.strip()
-    console.print(f"[dim]Generated message:[/dim] [cyan]{message}[/cyan]")
+    message = response.strip()
+    first_line = message.split("\n")[0] if '\n' in message else message
+    console.print(f"[dim]Generated message:[/dim] [cyan]{first_line}[/cyan]")
     return message
 
 
