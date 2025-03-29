@@ -1,6 +1,9 @@
+# Dependencies
 g4f
 rich
+
+# Dev
+mypy
 pytest
 pytest-asyncio
 pytest-mock
-gitpython
