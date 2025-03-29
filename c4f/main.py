@@ -1,44 +1,9 @@
-#!/usr/bin/env python3
 """
 Auto-Commit: An Intelligent Git Commit Message Generator
 
 This module provides an automated solution for generating meaningful Git commit messages
 based on the changes in your repository. It analyzes file changes, categorizes them by type,
 and generates descriptive commit messages using AI assistance.
-
-Key Features:
-    - Automatic detection of changed, added, and deleted files
-    - Smart categorization of changes (feat, fix, docs, etc.)
-    - AI-powered commit message generation
-    - Interactive commit process with manual override options
-    - Support for both individual and batch commits
-    - Handles binary files, directories, and permission issues gracefully
-
-Usage:
-    Run the script in a Git repository:
-    $ python main.py
-
-    The script will:
-    1. Detect all changes in the repository
-    2. Group related changes together
-    3. Generate commit messages for each group
-    4. Allow user interaction to approve, edit, or skip commits
-    5. Commit the changes with the generated/edited messages
-
-Commands:
-    - [Y/Enter]: Accept and commit changes
-    - [n]: Skip these changes
-    - [e]: Edit the commit message
-    - [a/all]: Accept all remaining commits without prompting
-
-Dependencies:
-    - g4f: For AI-powered commit message generation
-    - rich: For beautiful terminal output
-    - Python 3.6+: For modern Python features
-
-Author: Alaamer
-License: MIT
-Version: 1.0.0
 """
 
 import concurrent.futures
@@ -51,17 +16,12 @@ from concurrent.futures import TimeoutError
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple, Optional, Union, Literal, Dict, Any
-import contextlib
+from typing import List, Tuple, Optional, Union, Literal, Dict, Any, Final
 
-from rich.markdown import Markdown
-
-# Suppress g4f update messages by temporarily redirecting stderr
-with contextlib.redirect_stdout(open(os.devnull, 'w')):
-    import g4f
-    from g4f.client import Client
-
+import g4f
+from g4f.client import Client
 from rich.console import Console
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
@@ -69,15 +29,16 @@ from rich.table import Table
 console = Console()
 client = Client()
 
-# ROOT = Path(__file__).parent
-ROOT = r"E:\Projects\Languages\Python\auto-commit"
-PROMPT_THRESHOLD = 80  # lines
-FALLBACK_TIMEOUT = 10  # secs
-MIN_COMPREHENSIVE_LENGTH = 50  # minimum length for comprehensive commit messages
-ATTEMPT = 3  # number of attempts
 MODEL_TYPE = Union[g4f.Model, g4f.models, str]
-MODEL: MODEL_TYPE = g4f.models.gpt_4o_mini
-DIFF_MAX_LENGTH = 100
+
+# ROOT = Path(__file__).parent
+ROOT: Final = r"E:\Projects\Languages\Python\c4f"
+PROMPT_THRESHOLD: Final[int] = 80  # lines
+FALLBACK_TIMEOUT: Final[int] = 10  # secs
+MIN_COMPREHENSIVE_LENGTH: Final[int] = 50  # minimum length for comprehensive commit messages
+ATTEMPT: Final[int] = 3  # number of attempts
+DIFF_MAX_LENGTH: Final[int] = 100
+MODEL: Final[MODEL_TYPE] = g4f.models.gpt_4o_mini
 
 
 @dataclass
@@ -123,14 +84,15 @@ def parse_git_status() -> List[Tuple[str, str]]:
 def get_file_diff(file_path: str) -> str:
     console.print(f"Getting diff for {file_path}...", style="blue")
     path = Path(file_path)
-    
+
     if path.is_dir():
         return handle_directory(file_path)
-    
+
     if is_untracked(file_path):
         return handle_untracked_file(path)
-    
+
     return get_tracked_file_diff(file_path)
+
 
 def shorten_diff(diff: str) -> str:
     lines = diff.strip().splitlines()
@@ -140,6 +102,7 @@ def shorten_diff(diff: str) -> str:
 
     return "\n".join(lines)
 
+
 def get_tracked_file_diff(file_path: str) -> str:
     stdout, _, code = run_git_command(["git", "diff", "--cached", "--", file_path])
     if code == 0 and stdout:
@@ -147,24 +110,28 @@ def get_tracked_file_diff(file_path: str) -> str:
     stdout, _, code = run_git_command(["git", "diff", "--", file_path])
     return stdout if code == 0 else ""
 
+
 def handle_directory(file_path: str) -> str:
     return f"Directory: {file_path}"
+
 
 def is_untracked(file_path: str) -> bool:
     stdout, _, code = run_git_command(["git", "status", "--porcelain", file_path])
     return code == 0 and stdout.startswith("??")
+
 
 def handle_untracked_file(path: Path) -> str:
     if not path.exists():
         return f"File not found: {path}"
     if not os.access(path, os.R_OK):
         return f"Permission denied: {path}"
-    
+
     try:
         return read_file_content(path)
     except Exception as e:
         console.print(f"[red]Error reading file {path}:[/red] {e}", style="bold red")
         return f"Error: {str(e)}"
+
 
 def read_file_content(path: Path) -> str:
     try:
@@ -176,8 +143,6 @@ def read_file_content(path: Path) -> str:
             return f.read()
     except UnicodeDecodeError:
         return f"Binary file: {path}"
-
-
 
 
 def analyze_file_type(file_path: Path, diff: str) -> str:
@@ -199,15 +164,18 @@ def analyze_file_type(file_path: Path, diff: str) -> str:
 
     return "feat"  # Default case if no other type matches
 
+
 def check_python_file(file_path: Path, _: str) -> Optional[str]:
     if file_path.suffix == '.py':
         return 'test' if 'test' in str(file_path).lower() else 'feat'
     return None
 
+
 def check_documentation_file(file_path: Path, _: str) -> Optional[str]:
     if file_path.suffix in ['.md', '.rst', '.txt']:
         return 'docs'
     return None
+
 
 def check_configuration_file(file_path: Path, _: str) -> Optional[str]:
     config_files = ['.gitignore', 'requirements.txt', 'setup.py', 'setup.cfg', 'pyproject.toml']
@@ -215,8 +183,10 @@ def check_configuration_file(file_path: Path, _: str) -> Optional[str]:
         return 'chore'
     return None
 
+
 def check_script_file(file_path: Path, _: str) -> Optional[str]:
     return 'chore' if "scripts" in file_path.parts else None
+
 
 def check_test_file(file_path: Path, _: str) -> Optional[str]:
     return 'test' if is_test_file(file_path) else None
@@ -241,6 +211,7 @@ def check_diff_patterns(diff: str, _: str) -> Optional[str]:
     diff_patterns = get_diff_patterns()
     return check_patterns(str(diff).lower(), diff_patterns)
 
+
 def get_test_patterns() -> dict[str, str]:
     return {
         "test": r"^tests?/|^testing/|^__tests?__/|^test_.*\.py$|^.*_test\.py$|^.*\.spec\.[jt]s$|^.*\.test\.[jt]s$",
@@ -256,6 +227,7 @@ def get_test_patterns() -> dict[str, str]:
         "security": r"^security/|^auth/|^authentication/|^authorization/|^access control/|^permission/|^privilege/|^validation/|^sanitization/|^encryption/|^decryption/|^hashing/|^cipher/|^token/|^session/|^xss/|^sql injection/|^csrf/|^cors/|^firewall/|^waf/|^pen test/|^penetration test/|^audit/|^scan/|^detect/|^protect/|^prevent/|^mitigate/|^remedy/|^fix/|^patch/|^update/|^secure/|^harden/|^fortify/|^safeguard/|^shield/|^guard/|^block/|^filter/|^screen/|^check/|^verify/|^validate/|^confirm/|^ensure/|^ensure/|^trustworthy/|^reliable/|^robust/|^resilient/|^immune/|^impervious/|^invulnerable"
     }
 
+
 def get_diff_patterns() -> dict[str, str]:
     return {
         "test": r"\bdef test_|\bclass Test|\@pytest|\bunittest|\@test\b|\bit\(['\"]\w+['\"]|describe\(['\"]\w+['\"]|\bexpect\(|\bshould\b|\.spec\.|\.test\.|mock|stub|spy|assert|verify",
@@ -268,6 +240,7 @@ def get_diff_patterns() -> dict[str, str]:
         "security": r"\bsecurity|\bvulnerability|\bcve|\bauth|\bauthentication|\bauthorization|\baccess control|\bpermission|\bprivilege|\bvalidation|\bsanitization|\bencryption|\bdecryption|\bhashing|\bcipher|\btoken|\bsession|\bxss|\bsql injection|\bcsrf|\bcors|\bfirewall|\bwaf|\bpen test|\bpenetration test|\baudit|\bscan|\bdetect|\bprotect|\bprevent|\bmitigate|\bremedy|\bfix|\bpatch|\bupdate (?!UI|design)|\bsecure|\bharden|\bfortify|\bsafeguard|\bshield|\bguard|\bblock|\bfilter|\bscreen|\bcheck|\bverify|\bvalidate|\bconfirm|\bensure|\btrustworthy|\breliable|\brobust|\bresilient|\bimmune|\bimpervious|\binvulnerable",
         "chore": r"\bchore|\bupdate dependencies|\bupgrade|\bdowngrade|\bpackage|\bbump version|\brelease|\btag|\bversion|\bdeployment|\bci|\bcd|\bpipeline|\bworkflow|\bautomation|\bscripting|\bconfiguration|\bsetup|\bmaintenance|\bcleanup|\bupkeep|\borganize|\btrack|\bmonitor",
     }
+
 
 def check_patterns(text: str, patterns: dict) -> Optional[str]:
     """Check if text matches any pattern in the given dictionary."""
@@ -310,6 +283,7 @@ def generate_commit_message(changes: List[FileChange]) -> str:
 
     return generate_fallback_message(changes)
 
+
 def get_formatted_message(combined_context, tool_calls, changes, total_diff_lines):
     # Attempt to get Message
     message = attempt_generate_message(combined_context, tool_calls, changes, total_diff_lines)
@@ -318,6 +292,8 @@ def get_formatted_message(combined_context, tool_calls, changes, total_diff_line
     message = purify_message(message)
 
     return message
+
+
 def purify_batrick(message: str) -> str:
     if message.startswith("```") and message.endswith("```"):
         # Check if there's a language specifier like ```git or ```commit
@@ -333,6 +309,7 @@ def purify_batrick(message: str) -> str:
 
     return message
 
+
 def purify_commit_message_introduction(message: str) -> str:
     prefixes_to_remove = [
         "commit message:", "commit:", "git commit message:",
@@ -345,6 +322,7 @@ def purify_commit_message_introduction(message: str) -> str:
             message = message[len(prefix):].strip()
 
     return message
+
 
 def purify_explantory_message(message: str) -> str:
     explanatory_markers = [
@@ -359,8 +337,10 @@ def purify_explantory_message(message: str) -> str:
 
     return message
 
+
 def purify_htmlxml(message: str) -> str:
     return re.sub(r'<[^>]+>', '', message)
+
 
 def purify_disclaimers(message: str) -> str:
     lines = message.strip().split('\n')
@@ -398,6 +378,8 @@ def purify_message(message: Optional[str]) -> Optional[str]:
     message = re.sub(r'\n{3,}', '\n\n', message)
 
     return message
+
+
 def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summary: str = "") -> Dict[str, Any]:
     if is_comprehensive:
         return create_comprehensive_tool_call(combined_text, diffs_summary)
@@ -446,7 +428,6 @@ def create_comprehensive_tool_call(combined_text: str, diffs_summary: str) -> Di
         },
         "type": "function"
     }
-
 
 
 def attempt_generate_message(combined_context: str, tool_calls: Dict[str, Any], changes: List[FileChange],
@@ -622,20 +603,21 @@ def handle_error(error: Exception) -> None:
 def commit_changes(files: List[str], message: str):
     """Commit the changes to the specified files with the given message."""
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
     ) as progress:
         # Stage files
         stage_files(files, progress)
-        
+
         # Commit changes
         commit_result = do_commit(message, progress)
-        
+
         # Display result
         display_commit_result(commit_result, message)
+
 
 def do_commit(message: str, progress: Progress) -> Tuple[str, int]:
     """Perform the actual git commit."""
@@ -644,11 +626,13 @@ def do_commit(message: str, progress: Progress) -> Tuple[str, int]:
     progress.update(task, advance=1)
     return stdout, code
 
+
 def stage_files(files: List[str], progress: Progress):
     stage_task = progress.add_task("Staging files...", total=len(files))
     for file_path in files:
         run_git_command(["git", "add", "--", file_path])
         progress.advance(stage_task)
+
 
 def display_commit_result(result: Tuple[str, int], message: str):
     stderr, code = result
@@ -754,14 +738,14 @@ def main():
 
     display_changes(changes)
     groups = group_related_changes(changes)
-    
+
     accept_all = False
     for group in groups:
         if accept_all:
             process_change_group(group, accept_all=True)
         else:
             accept_all = process_change_group(group)
-    
+
 
 def get_valid_changes():
     changed_files = parse_git_status()
@@ -839,6 +823,7 @@ def process_change_group(group: List["FileChange"], accept_all: bool = False) ->
     response = get_valid_user_response()
     return handle_user_response(response, group, message)
 
+
 def get_valid_user_response() -> str:
     prompt = "Proceed with commit? ([Y/n] [/e] to edit [all/a] for accept all): "
     while True:
@@ -846,6 +831,7 @@ def get_valid_user_response() -> str:
         if response in ["y", "n", "e", "a", "all", ""]:
             return response
         prompt = "Invalid response. " + prompt
+
 
 def handle_user_response(response: str, group: List[FileChange], message: str) -> bool:
     actions = {
@@ -863,6 +849,7 @@ def handle_user_response(response: str, group: List[FileChange], message: str) -
 
     actions[response]()
     return True if response in ["a", "all"] else False
+
 
 def do_group_commit(group: List[FileChange], message: str, accept_all: bool = False) -> bool:
     """Commit a group of changes and return whether to accept all future commits."""

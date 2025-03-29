@@ -2,7 +2,7 @@ from unittest.mock import patch, MagicMock, ANY
 
 import pytest
 
-from auto_commit.main import *
+from c4f.main import *
 
 
 @pytest.fixture
@@ -14,6 +14,7 @@ def mock_popen():
         mock_popen.return_value = mock_process
         yield mock_popen
 
+
 def test_run_git_command(mock_popen):
     stdout, stderr, code = run_git_command(["git", "status"])
     assert stdout == "mock output"
@@ -21,80 +22,95 @@ def test_run_git_command(mock_popen):
     assert code == 0
     mock_popen.assert_called_once_with(["git", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
+
 @pytest.fixture
 def mock_run_git_command():
-    with patch("auto_commit.main.run_git_command") as mock_cmd:
+    with patch("c4f.main.run_git_command") as mock_cmd:
         yield mock_cmd
+
 
 def test_parse_git_status(mock_run_git_command):
     mock_run_git_command.return_value = ("M file1.txt\nA file2.txt\n?? newfile.txt", "", 0)
     expected_output = [("M", "file1.txt"), ("A", "file2.txt"), ("A", "newfile.txt")]
     assert parse_git_status() == expected_output
 
+
 def test_parse_git_status_with_error(mock_run_git_command):
     mock_run_git_command.return_value = ("", "fatal: not a git repository", 1)
     with pytest.raises(SystemExit):
         parse_git_status()
 
+
 @pytest.fixture
 def mock_tracked_diff():
-    with patch("auto_commit.main.run_git_command") as mock_cmd:
+    with patch("c4f.main.run_git_command") as mock_cmd:
         yield mock_cmd
+
 
 def test_get_tracked_file_diff(mock_tracked_diff):
     mock_tracked_diff.side_effect = [("mock diff", "", 0), ("", "", 0)]
     assert get_tracked_file_diff("file1.txt") == "mock diff"
     mock_tracked_diff.assert_called_with(["git", "diff", "--cached", "--", "file1.txt"])
 
+
 @pytest.fixture
 def mock_is_dir():
-    with patch("auto_commit.main.Path.is_dir", return_value=True) as mock:
+    with patch("c4f.main.Path.is_dir", return_value=True) as mock:
         yield mock
+
 
 @pytest.fixture
 def mock_is_untracked():
-    with patch("auto_commit.main.is_untracked", return_value=True) as mock:
+    with patch("c4f.main.is_untracked", return_value=True) as mock:
         yield mock
+
 
 @pytest.fixture
 def mock_handle_untracked_file():
-    with patch("auto_commit.main.handle_untracked_file", return_value="mock diff") as mock:
+    with patch("c4f.main.handle_untracked_file", return_value="mock diff") as mock:
         yield mock
+
 
 @pytest.fixture
 def mock_handle_directory():
-    with patch("auto_commit.main.handle_directory", return_value="mock dir diff") as mock:
+    with patch("c4f.main.handle_directory", return_value="mock dir diff") as mock:
         yield mock
+
 
 def test_get_file_diff_directory(mock_is_dir, mock_handle_directory):
     assert get_file_diff("some_dir") == "mock dir diff"
     mock_is_dir.assert_called_once()
     mock_handle_directory.assert_called_once()
 
+
 def test_get_file_diff_untracked(mock_is_untracked, mock_handle_untracked_file):
     assert get_file_diff("newfile.txt") == "mock diff"
     mock_is_untracked.assert_called_once()
     mock_handle_untracked_file.assert_called_once()
 
-@patch("auto_commit.main.run_git_command")
+
+@patch("c4f.main.run_git_command")
 def test_is_untracked(mock_run_git_command):
     mock_run_git_command.return_value = ("?? file.txt", "", 0)
     assert is_untracked("file.txt") is True
     mock_run_git_command.return_value = ("M file.txt", "", 0)
     assert is_untracked("file.txt") is False
 
-@patch("auto_commit.main.os.access", return_value=False)
-@patch("auto_commit.main.Path.exists", return_value=True)
+
+@patch("c4f.main.os.access", return_value=False)
+@patch("c4f.main.Path.exists", return_value=True)
 def test_handle_untracked_file_permission_denied(mock_exists, mock_access):
     assert handle_untracked_file(Path("file.txt")) == "Permission denied: file.txt"
 
-@patch("auto_commit.main.Path.exists", return_value=False)
+
+@patch("c4f.main.Path.exists", return_value=False)
 def test_handle_untracked_file_not_found(mock_exists):
     assert handle_untracked_file(Path("file.txt")) == "File not found: file.txt"
 
-@patch("auto_commit.main.os.access", return_value=True)  # Ensure file is readable
-@patch("auto_commit.main.Path.exists", return_value=True)  # Ensure file exists
-@patch("auto_commit.main.read_file_content", return_value="mock content")  # Mock file reading
+
+@patch("c4f.main.os.access", return_value=True)  # Ensure file is readable
+@patch("c4f.main.Path.exists", return_value=True)  # Ensure file exists
+@patch("c4f.main.read_file_content", return_value="mock content")  # Mock file reading
 def test_handle_untracked_file_read(mock_read, mock_exists, mock_access):
     assert handle_untracked_file(Path("file.txt")) == "mock content"
 
@@ -103,10 +119,12 @@ def test_handle_untracked_file_read(mock_read, mock_exists, mock_access):
 def test_read_file_content_binary(mock_open):
     assert read_file_content(Path("file.txt")) == "Binary file: file.txt"
 
+
 @patch("builtins.open", new_callable=MagicMock)
 def test_read_file_content(mock_open):
     mock_open.return_value.__enter__.return_value.read.side_effect = ["text content", "text content"]
     assert read_file_content(Path("file.txt")) == "text content"
+
 
 @pytest.mark.parametrize("file_path, diff, expected", [
     (Path("src/module.py"), "", "feat"),
@@ -119,6 +137,7 @@ def test_read_file_content(mock_open):
 def test_analyze_file_type(file_path, diff, expected):
     assert analyze_file_type(file_path, diff) == expected
 
+
 @pytest.mark.parametrize("file_path, expected", [
     (Path("src/main.py"), "feat"),
     (Path("tests/test_main.py"), "test"),
@@ -126,6 +145,7 @@ def test_analyze_file_type(file_path, diff, expected):
 ])
 def test_check_python_file(file_path, expected):
     assert check_python_file(file_path, "") == expected
+
 
 @pytest.mark.parametrize("file_path, expected", [
     (Path("README.md"), "docs"),
@@ -136,15 +156,17 @@ def test_check_python_file(file_path, expected):
 def test_check_documentation_file(file_path, expected):
     assert check_documentation_file(file_path, "") == expected
 
+
 @pytest.mark.parametrize("file_path, expected", [
     (Path("setup.py"), "chore"),
     (Path("requirements.txt"), "chore"),
     (Path(".gitignore"), "chore"),
     (Path("config.yaml"), None),  # Not in the list of known config files
-    (Path("random.py"), None),    # Not a config file
+    (Path("random.py"), None),  # Not a config file
 ])
 def test_check_configuration_file(file_path, expected):
     assert check_configuration_file(file_path, "") == expected
+
 
 @pytest.mark.parametrize("file_path, expected", [
     (Path("scripts/deploy.sh"), "chore"),
@@ -153,12 +175,14 @@ def test_check_configuration_file(file_path, expected):
 def test_check_script_file(file_path, expected):
     assert check_script_file(file_path, "") == expected
 
+
 @pytest.mark.parametrize("file_path, expected", [
     (Path("tests/test_file.py"), "test"),
     (Path("src/module.py"), None),
 ])
 def test_check_test_file(file_path, expected):
     assert check_test_file(file_path, "") == expected
+
 
 @pytest.mark.parametrize("file_path, expected", [
     (Path("tests/test_file.py"), True),
@@ -167,6 +191,7 @@ def test_check_test_file(file_path, expected):
 ])
 def test_is_test_file(file_path, expected):
     assert is_test_file(file_path) == expected
+
 
 @pytest.mark.parametrize("category, file_path, expected", [
     ("test", "tests/test_example.py", True),
@@ -221,6 +246,7 @@ def test_get_diff_patterns(category, diff_text, expected):
     pattern = re.compile(patterns[category], re.IGNORECASE)
     assert bool(pattern.search(diff_text)) == expected
 
+
 def test_group_related_changes():
     changes = [
         FileChange(path=Path("src/module1/file1.py"), type="feat", status="added", diff=""),
@@ -234,7 +260,6 @@ def test_group_related_changes():
     assert len(groups[0]) == 2  # Two feature changes in src/module1
     assert len(groups[1]) == 1  # One fix in src/module2
     assert len(groups[2]) == 1  # One fix in root directory
-
 
 
 def test_generate_commit_message():
@@ -255,11 +280,11 @@ def test_determine_tool_calls():
     assert "summary" in comprehensive_result["function"]["arguments"][
         "sections"]
 
+
 def test_attempt_generate_message():
     changes = [FileChange("feat", "src/module1/file1.py", "added")]
     message = attempt_generate_message("Some context", {"tool": "mock"}, changes, 10)
     assert message is None or isinstance(message, str)  # It should return a string or None
-
 
 
 def test_create_combined_context():
@@ -313,7 +338,7 @@ def test_determine_prompt_large_change():
 def test_model_prompt():
     prompt = "Test prompt"
     tool_calls = {}
-    with patch("auto_commit.main.get_model_response", return_value="Mocked response"):
+    with patch("c4f.main.get_model_response", return_value="Mocked response"):
         response = model_prompt(prompt, tool_calls)
         assert response == "Mocked response"
 
@@ -321,21 +346,23 @@ def test_model_prompt():
 def test_get_model_response():
     prompt = "Test model prompt"
     tool_calls = {}
-    with patch("auto_commit.main.client.chat.completions.create") as mock_create:
+    with patch("c4f.main.client.chat.completions.create") as mock_create:
         mock_create.return_value.choices = [
             type("obj", (object,), {"message": type("msg", (object,), {"content": "Mocked content"})})]
         response = get_model_response(prompt, tool_calls)
         assert response == "Mocked content"
 
-    with patch("auto_commit.main.client.chat.completions.create", side_effect=Exception("API error")):
+    with patch("c4f.main.client.chat.completions.create", side_effect=Exception("API error")):
         response = get_model_response(prompt, tool_calls)
         assert response is None
-        
+
+
 def test_execute_with_progress():
     mock_func = MagicMock(return_value="Mocked response")
-    with patch("auto_commit.main.execute_with_timeout", return_value="Mocked response"):
+    with patch("c4f.main.execute_with_timeout", return_value="Mocked response"):
         response = execute_with_progress(mock_func)
         assert response == "Mocked response"
+
 
 def test_execute_with_timeout():
     mock_func = MagicMock(return_value="Mocked response")
@@ -343,6 +370,7 @@ def test_execute_with_timeout():
     task = MagicMock()
     response = execute_with_timeout(mock_func, progress, task)
     assert response == "Mocked response"
+
 
 def test_execute_with_timeout_exception():
     mock_func = MagicMock(side_effect=Exception("Test exception"))
@@ -355,13 +383,15 @@ def test_execute_with_timeout_exception():
 def test_process_response_none():
     assert process_response(None) is None
 
+
 def test_handle_error_timeout():
-    with patch("auto_commit.main.console.print") as mock_print:
+    with patch("c4f.main.console.print") as mock_print:
         handle_error(TimeoutError())
         mock_print.assert_called_with("[yellow]Model response timed out, using fallback message[/yellow]")
 
+
 def test_handle_error_general():
-    with patch("auto_commit.main.console.print") as mock_print:
+    with patch("c4f.main.console.print") as mock_print:
         handle_error(Exception("Test error"))
         mock_print.assert_called_with("[yellow]Error in model response, using fallback message: Test error[/yellow]")
 
@@ -369,9 +399,9 @@ def test_handle_error_general():
 def test_commit_changes():
     files = ["file1.txt", "file2.txt"]
     message = "feat: add new feature"
-    with patch("auto_commit.main.stage_files") as mock_stage, \
-            patch("auto_commit.main.do_commit", return_value=("Commit successful", 0)) as mock_commit, \
-            patch("auto_commit.main.display_commit_result") as mock_display:
+    with patch("c4f.main.stage_files") as mock_stage, \
+            patch("c4f.main.do_commit", return_value=("Commit successful", 0)) as mock_commit, \
+            patch("c4f.main.display_commit_result") as mock_display:
         commit_changes(files, message)
         mock_stage.assert_called_once_with(files, ANY)  # Use ANY instead of `any`
         mock_commit.assert_called_once_with(message, ANY)
@@ -380,7 +410,7 @@ def test_commit_changes():
 
 def test_do_commit():
     message = "fix: bug fix"
-    with patch("auto_commit.main.run_git_command", return_value=("Commit successful", "", 0)) as mock_run:
+    with patch("c4f.main.run_git_command", return_value=("Commit successful", "", 0)) as mock_run:
         result = do_commit(message, MagicMock())
         mock_run.assert_called_once_with(["git", "commit", "-m", message])
         assert result == ("Commit successful", 0)
@@ -388,7 +418,7 @@ def test_do_commit():
 
 def test_stage_files():
     files = ["file1.txt", "file2.txt"]
-    with patch("auto_commit.main.run_git_command") as mock_run:
+    with patch("c4f.main.run_git_command") as mock_run:
         stage_files(files, MagicMock())
         mock_run.assert_any_call(["git", "add", "--", "file1.txt"])
         mock_run.assert_any_call(["git", "add", "--", "file2.txt"])
@@ -396,19 +426,19 @@ def test_stage_files():
 
 
 def test_display_commit_result_success():
-    with patch("auto_commit.main.console.print") as mock_print:
+    with patch("c4f.main.console.print") as mock_print:
         display_commit_result(("", 0), "test commit")
         mock_print.assert_called_with("[green]✔ Successfully committed:[/green] test commit")
 
 
 def test_display_commit_result_failure():
-    with patch("auto_commit.main.console.print") as mock_print:
+    with patch("c4f.main.console.print") as mock_print:
         display_commit_result(("Error committing", 1), "test commit")
         mock_print.assert_called_with("[red]✘ Error committing changes:[/red] Error committing")
 
 
 def test_reset_staging():
-    with patch("auto_commit.main.run_git_command") as mock_run:
+    with patch("c4f.main.run_git_command") as mock_run:
         reset_staging()
         mock_run.assert_called_once_with(["git", "reset", "HEAD"])
 
@@ -427,6 +457,7 @@ def test_format_time_ago():
     assert format_time_ago(now - 120) == "2m ago"  # ~2 minutes ago
     assert format_time_ago(now) == "just now"
 
+
 class MockFileChange:
     def __init__(self, status, path, _type, diff_lines, last_modified):
         self.status = status
@@ -435,6 +466,7 @@ class MockFileChange:
         self.diff_lines = diff_lines
         self.last_modified = last_modified
 
+
 def test_create_staged_table():
     table = create_staged_table()
     assert isinstance(table, Table)
@@ -442,6 +474,7 @@ def test_create_staged_table():
     assert table.show_header is True
     assert table.header_style == "bold magenta"
     assert table.show_lines is True
+
 
 def test_config_staged_table():
     table = Table()
@@ -453,93 +486,105 @@ def test_config_staged_table():
     assert table.columns[3].header == "Changes"
     assert table.columns[4].header == "Last Modified"
 
+
 def test_apply_table_styling():
     table = Table()
     change = MockFileChange("M", "file1.txt", "Modified", 10, 1640995200)
-    with patch("auto_commit.main.format_diff_lines", return_value="10"), \
-         patch("auto_commit.main.format_time_ago", return_value="2d ago"):
+    with patch("c4f.main.format_diff_lines", return_value="10"), \
+            patch("c4f.main.format_time_ago", return_value="2d ago"):
         apply_table_styling(table, change)
     assert len(table.rows) == 1
+
 
 def test_display_changes():
     changes = [
         MockFileChange("A", "file1.txt", "Added", 5, 1640995200),
         MockFileChange("D", "file2.txt", "Deleted", 15, 1640995300)
     ]
-    with patch("auto_commit.main.console.print") as mock_print:
+    with patch("c4f.main.console.print") as mock_print:
         display_changes(changes)
         assert mock_print.called
 
+
 def test_handle_non_existent_git_repo():
-    with patch("auto_commit.main.os.path.exists", return_value=False), \
-         patch("auto_commit.main.sys.exit") as mock_exit, \
-         patch("auto_commit.main.console.print") as mock_print:
+    with patch("c4f.main.os.path.exists", return_value=False), \
+            patch("c4f.main.sys.exit") as mock_exit, \
+            patch("c4f.main.console.print") as mock_print:
         handle_non_existent_git_repo()
         mock_print.assert_called_once_with("[red]Error: Not a git repository[/red]")
         mock_exit.assert_called_once_with(1)
 
+
 def test_main():
-    with patch("auto_commit.main.handle_non_existent_git_repo"), \
-         patch("auto_commit.main.reset_staging"), \
-         patch("auto_commit.main.get_valid_changes", return_value=["change"]), \
-         patch("auto_commit.main.display_changes"), \
-         patch("auto_commit.main.group_related_changes", return_value=[["group1"]]), \
-         patch("auto_commit.main.process_change_group", return_value=True):
+    with patch("c4f.main.handle_non_existent_git_repo"), \
+            patch("c4f.main.reset_staging"), \
+            patch("c4f.main.get_valid_changes", return_value=["change"]), \
+            patch("c4f.main.display_changes"), \
+            patch("c4f.main.group_related_changes", return_value=[["group1"]]), \
+            patch("c4f.main.process_change_group", return_value=True):
         main()
 
+
 def test_get_valid_changes():
-    with patch("auto_commit.main.parse_git_status", return_value=[("M", "file1.txt")]), \
-         patch("auto_commit.main.process_changed_files", return_value=["processed_change"]):
+    with patch("c4f.main.parse_git_status", return_value=[("M", "file1.txt")]), \
+            patch("c4f.main.process_changed_files", return_value=["processed_change"]):
         changes = get_valid_changes()
         assert changes == ["processed_change"]
 
+
 def test_process_changed_files():
-    with patch("auto_commit.main.create_progress_bar", return_value=MagicMock()), \
-         patch("auto_commit.main.create_progress_tasks", return_value=(MagicMock(), MagicMock())), \
-         patch("auto_commit.main.process_single_file", return_value="file_change"):
+    with patch("c4f.main.create_progress_bar", return_value=MagicMock()), \
+            patch("c4f.main.create_progress_tasks", return_value=(MagicMock(), MagicMock())), \
+            patch("c4f.main.process_single_file", return_value="file_change"):
         changes = process_changed_files([("M", "file1.txt")])
         assert changes == ["file_change"]
+
 
 def test_create_progress_bar():
     progress = create_progress_bar()
     assert isinstance(progress, Progress)
+
 
 def test_create_progress_tasks():
     progress = MagicMock()
     _, _ = create_progress_tasks(progress, 5)
     assert progress.add_task.called
 
+
 def test_process_single_file():
-    with patch("auto_commit.main.get_file_diff", return_value="diff"), \
-         patch("auto_commit.main.analyze_file_type", return_value="Modified"), \
-         patch("auto_commit.main.FileChange") as mock_file_change:
+    with patch("c4f.main.get_file_diff", return_value="diff"), \
+            patch("c4f.main.analyze_file_type", return_value="Modified"), \
+            patch("c4f.main.FileChange") as mock_file_change:
         progress_mock = MagicMock()
         diff_task = MagicMock()
         result = process_single_file("M", "file1.txt", progress_mock, diff_task)
         assert result == mock_file_change.return_value
         progress_mock.advance.assert_called_once_with(diff_task)
 
+
 def test_create_file_change():
-    with patch("auto_commit.main.get_file_diff", return_value="diff"), \
-         patch("auto_commit.main.analyze_file_type", return_value="Modified"), \
-         patch("auto_commit.main.FileChange") as mock_file_change:
+    with patch("c4f.main.get_file_diff", return_value="diff"), \
+            patch("c4f.main.analyze_file_type", return_value="Modified"), \
+            patch("c4f.main.FileChange") as mock_file_change:
         result = create_file_change("M", "file1.txt")
         assert result == mock_file_change.return_value
 
+
 def test_exit_with_no_changes():
-    with patch("auto_commit.main.console.print") as mock_print, \
-         patch("auto_commit.main.sys.exit") as mock_exit:
+    with patch("c4f.main.console.print") as mock_print, \
+            patch("c4f.main.sys.exit") as mock_exit:
         exit_with_no_changes()
         mock_print.assert_called_once_with("[yellow]⚠ No changes to commit[/yellow]")
         mock_exit.assert_called_once_with(0)
 
+
 def test_process_change_group():
     group = [MockFileChange("M", "file1.txt", "Modified", 10, 1640995200)]
-    with patch("auto_commit.main.generate_commit_message", return_value="Commit message"), \
-         patch("auto_commit.main.display_commit_preview"), \
-         patch("auto_commit.main.do_group_commit", return_value=True) as mock_commit, \
-         patch("auto_commit.main.get_valid_user_response", return_value="y"), \
-         patch("auto_commit.main.handle_user_response", return_value=True) as mock_response:
+    with patch("c4f.main.generate_commit_message", return_value="Commit message"), \
+            patch("c4f.main.display_commit_preview"), \
+            patch("c4f.main.do_group_commit", return_value=True) as mock_commit, \
+            patch("c4f.main.get_valid_user_response", return_value="y"), \
+            patch("c4f.main.handle_user_response", return_value=True) as mock_response:
         result = process_change_group(group, accept_all=True)
         assert result is True
         mock_commit.assert_called_once_with(group, "Commit message", True)
@@ -547,6 +592,7 @@ def test_process_change_group():
         result = process_change_group(group, accept_all=False)
         assert result is True
         mock_response.assert_called_once_with("y", group, "Commit message")
+
 
 def test_get_valid_user_response():
     with patch("builtins.input", side_effect=["y", "n", "e", "a", "all", ""]):
@@ -562,8 +608,8 @@ def test_handle_user_response():
     group = [MockFileChange("M", "file1.txt", "Modified", 10, 1640995200)]
     message = "Commit message"
 
-    with patch("auto_commit.main.do_group_commit") as mock_commit, \
-            patch("auto_commit.main.console.print") as mock_print:
+    with patch("c4f.main.do_group_commit") as mock_commit, \
+            patch("c4f.main.console.print") as mock_print:
         # Test "y" response (should call do_group_commit)
         assert handle_user_response("y", group, message) is False
         mock_commit.assert_called_with(group, message)
@@ -579,14 +625,14 @@ def test_handle_user_response():
 
 def test_do_group_commit():
     group = [MockFileChange("M", "file1.txt", "Modified", 10, 1640995200)]
-    with patch("auto_commit.main.commit_changes") as mock_commit:
+    with patch("c4f.main.commit_changes") as mock_commit:
         result = do_group_commit(group, "Commit message", True)
         mock_commit.assert_called_with(["file1.txt"], "Commit message")
         assert result is True
 
 
 def test_display_commit_preview():
-    with patch("auto_commit.main.console.print") as mock_print:
+    with patch("c4f.main.console.print") as mock_print:
         display_commit_preview("Test commit message")
 
         # Ensure print was called at least once
