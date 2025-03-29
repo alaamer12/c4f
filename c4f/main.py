@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+import warnings
 from collections import defaultdict
 from concurrent.futures import TimeoutError
 from dataclasses import dataclass
@@ -32,6 +33,10 @@ client = Client()
 MODEL_TYPE = Union[g4f.Model, g4f.models, str]
 
 # ROOT = Path(__file__).parent
+FORCE_BRACKETS = False
+if FORCE_BRACKETS:
+    warnings.warn("Forcing brackets can lead to longer commit message generation and failures.", UserWarning)
+
 ROOT: Final = r"E:\Projects\Languages\Python\c4f"
 PROMPT_THRESHOLD: Final[int] = 80  # lines
 FALLBACK_TIMEOUT: Final[int] = 10  # secs
@@ -39,6 +44,7 @@ MIN_COMPREHENSIVE_LENGTH: Final[int] = 50  # minimum length for comprehensive co
 ATTEMPT: Final[int] = 3  # number of attempts
 DIFF_MAX_LENGTH: Final[int] = 100
 MODEL: Final[MODEL_TYPE] = g4f.models.gpt_4o_mini
+
 
 @dataclass
 class FileChange:
@@ -62,6 +68,7 @@ def run_git_command(command: List[str]) -> Tuple[str, str, int]:
 
 def get_root_git_workspace() -> Path:
     return Path(__file__).parent
+
 
 def parse_git_status() -> List[Tuple[str, str]]:
     stdout, stderr, code = run_git_command(["git", "status", "--porcelain"])
@@ -271,12 +278,12 @@ def generate_commit_message(changes: List[FileChange]) -> str:
     for _ in range(ATTEMPT):
         message = get_formatted_message(combined_context, tool_calls, changes, total_diff_lines)
 
-        if not message:
+        if is_corrupted_message(message):
             continue
 
         if is_comprehensive:
             result = handle_comprehensive_message(message, changes)
-            if result == "retry":
+            if result in ["retry", "r"]:
                 continue
             if result:
                 return result
@@ -284,6 +291,13 @@ def generate_commit_message(changes: List[FileChange]) -> str:
             return message
 
     return generate_fallback_message(changes)
+
+
+def is_corrupted_message(message: str) -> bool:
+    return (not message
+            or not is_conventional_type(message)
+            or not is_convetional_type_with_brackets(message)
+            )
 
 
 def get_formatted_message(combined_context, tool_calls, changes, total_diff_lines):
@@ -310,6 +324,28 @@ def purify_batrick(message: str) -> str:
             message = message[3:-3]
 
     return message
+
+
+def is_conventional_type(message: str) -> bool:
+    if not any(x in message.lower() for x in
+                ["feat", "test", "fix", "docs", "chore",
+                "refactor", "style", "perf", "ci", "build",
+                "security"
+                ]
+               ):
+        return False
+    return True
+
+
+def is_convetional_type_with_brackets(message: str) -> bool:
+    if not FORCE_BRACKETS:
+        return True
+
+    first_word: str = message.split()[0]
+    if "(" not in first_word and ")" not in first_word:
+        return False
+
+    return True
 
 
 def purify_commit_message_introduction(message: str) -> str:
@@ -507,15 +543,18 @@ def determine_prompt(combined_text: str, changes: List[FileChange], diff_lines: 
 
 
 def generate_simple_prompt(combined_text):
+    force_brackets_line = "Please use brackets with conventional commits [e.g. feat(main): ...]" if FORCE_BRACKETS else ""
     return f"""
         Analyze these file changes and generate a conventional commit message:
         {combined_text}
         Respond with only a single-line commit message following conventional commits format.
         Keep it brief and focused on the main change.
+        {force_brackets_line}
         """
 
 
 def generate_comprehensive_prompt(combined_text, diffs_summary):
+    force_brackets_line = "Please use brackets with conventional commits [e.g. feat(main): ...]" if FORCE_BRACKETS else ""
     return f"""
     Analyze these file changes and generate a detailed conventional commit message:
 
@@ -541,7 +580,8 @@ def generate_comprehensive_prompt(combined_text, diffs_summary):
     4. Add detailed bullet points for significant changes
     5. Mention breaking changes if any
     6. Reference issues/PRs if applicable
-
+    
+    {force_brackets_line}
     Respond with ONLY the commit message, no explanations.
     """
 
