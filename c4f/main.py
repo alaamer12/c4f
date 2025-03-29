@@ -16,10 +16,10 @@ from concurrent.futures import TimeoutError
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple, Optional, Union, Literal, Dict, Any, Final
+from typing import List, Tuple, Optional, Union, Literal, Dict, Any, Final, Callable
 
-import g4f
-from g4f.client import Client
+import g4f  # type: ignore
+from g4f.client import Client  # type: ignore
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -40,11 +40,10 @@ ATTEMPT: Final[int] = 3  # number of attempts
 DIFF_MAX_LENGTH: Final[int] = 100
 MODEL: Final[MODEL_TYPE] = g4f.models.gpt_4o_mini
 
-
 @dataclass
 class FileChange:
     path: Path
-    status: Literal["M", "A", "D", "R"]  # type:   # 'M' (modified), 'A' (added), 'D' (deleted), 'R' (renamed)
+    status: Literal["M", "A", "D", "R"]
     diff: str
     type: Optional[str] = None  # 'feat', 'fix', 'docs', etc.
     diff_lines: int = 0
@@ -60,6 +59,9 @@ def run_git_command(command: List[str]) -> Tuple[str, str, int]:
     stdout, stderr = process.communicate()
     return stdout, stderr, process.returncode
 
+
+def get_root_git_workspace() -> Path:
+    return Path(__file__).parent
 
 def parse_git_status() -> List[Tuple[str, str]]:
     stdout, stderr, code = run_git_command(["git", "status", "--porcelain"])
@@ -147,7 +149,7 @@ def read_file_content(path: Path) -> str:
 
 def analyze_file_type(file_path: Path, diff: str) -> str:
     """Determine the type of change based on file path and diff content."""
-    file_type_checks = [
+    file_type_checks: list[Callable[[Path, str], Optional[str]]] = [
         check_python_file,
         check_documentation_file,
         check_configuration_file,
@@ -157,8 +159,8 @@ def analyze_file_type(file_path: Path, diff: str) -> str:
         check_diff_patterns,
     ]
 
-    for check in file_type_checks:
-        result = check(file_path, diff)
+    for _check in file_type_checks:
+        result = _check(file_path, diff)
         if result:
             return result
 
@@ -205,7 +207,7 @@ def check_file_path_patterns(file_path: Path, _: str) -> Optional[str]:
     return check_patterns(str(file_path), type_patterns)
 
 
-def check_diff_patterns(diff: str, _: str) -> Optional[str]:
+def check_diff_patterns(diff: Path, _: str) -> Optional[str]:
     """Check diff content patterns to determine file type."""
     # Enhanced patterns for detecting commit types from diff content
     diff_patterns = get_diff_patterns()
@@ -673,6 +675,9 @@ def format_time_ago(timestamp: float) -> str:
                 return unit
             count = int(diff / seconds)
             return f"{count}{unit} ago"
+
+    # Time units is None
+    return "N/A"
 
 
 def create_staged_table() -> Table:
