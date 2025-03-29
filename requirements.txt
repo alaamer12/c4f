@@ -5,5 +5,5 @@ rich
 # Dev
 mypy
 pytest
-pytest-asyncio
-pytest-mock
+coverage
+poetry
