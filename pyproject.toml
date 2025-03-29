@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "c4f"
+version = "0.1.0"
+description = "A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes."
+authors = ["alaamer12 <ahmedmuhamed12@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "c4f"}]
+
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+g4f = "^0.4.9.9"
+rich = "^13.9.4"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+coverage = "^7.7.1"
+mypy = "^1.15.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "-ra -q --cov=true_generating"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+branch = true
+source = ["c4f"]
+omit = ["**/__main__.py"]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "    pass",
+    "except ImportError:",
+    "    pass",
+    "except Exception:",
+    "    pass",
+]
+ignore_errors = true
+fail_under = 80 # Set minimum coverage percentage
+show_missing = true

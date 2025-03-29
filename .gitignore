@@ -99,3 +99,5 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+/har_and_cookies/blackbox.json
+/poetry.lock
