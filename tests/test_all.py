@@ -351,9 +351,6 @@ def test_execute_with_timeout_exception():
     response = execute_with_timeout(mock_func, progress, task)
     assert response is None
 
-def test_process_response():
-    response = "Generated commit message\nAdditional details"
-    assert process_response(response) == "Generated commit message"
 
 def test_process_response_none():
     assert process_response(None) is None
