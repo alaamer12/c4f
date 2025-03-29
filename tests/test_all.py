@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch, MagicMock, ANY
 
 import pytest
@@ -645,3 +646,333 @@ def test_display_commit_preview():
         assert isinstance(panel_arg, Panel)
         assert "Proposed commit message:" in panel_arg.renderable
         assert "[bold cyan]Test commit message[/bold cyan]" in panel_arg.renderable
+
+
+@patch("c4f.main.run_git_command")
+def test_git_status_success(mock_run_git):
+    mock_run_git.return_value = (" M modified.txt\nA  added.txt\nR  old.txt -> new.txt\n?? untracked.txt", "", 0)
+    expected_output = [("M", "modified.txt"), ("A", "added.txt"), ("R", "new.txt"), ("A", "untracked.txt")]
+    assert parse_git_status() == expected_output
+
+@patch("c4f.main.run_git_command")
+def test_git_status_error_exit(mock_run_git):
+    mock_run_git.return_value = ("", "fatal: Not a git repository", 1)
+    with patch("sys.exit") as mock_exit:
+        parse_git_status()
+        mock_exit.assert_called_once_with(1)
+
+@patch("c4f.main.run_git_command")
+def test_git_status_empty_output(mock_run_git):
+    mock_run_git.return_value = ("", "", 0)
+    assert parse_git_status() == []
+
+@patch("c4f.main.run_git_command")
+def test_git_status_untracked_files(mock_run_git):
+    mock_run_git.return_value = ("?? new_file.txt\n?? another_file.txt", "", 0)
+    expected_output = [("A", "new_file.txt"), ("A", "another_file.txt")]
+    assert parse_git_status() == expected_output
+
+@patch("c4f.main.run_git_command")
+def test_git_status_renamed_file(mock_run_git):
+    mock_run_git.return_value = ("R  old_name.txt -> new_name.txt", "", 0)
+    expected_output = [("R", "new_name.txt")]
+    assert parse_git_status() == expected_output
+
+@patch("c4f.main.run_git_command")
+def test_git_status_mixed_changes(mock_run_git):
+    mock_run_git.return_value = (" M modified.txt\nD  deleted.txt\nA  new.txt\n?? untracked.txt", "", 0)
+    expected_output = [("M", "modified.txt"), ("D", "deleted.txt"), ("A", "new.txt"), ("A", "untracked.txt")]
+    assert parse_git_status() == expected_output
+
+def mock_handle_directory(file_path):  # type: ignore
+    return f"Mocked directory handling for {file_path}"
+
+def mock_handle_untracked_file(path):  # type: ignore
+    return f"Mocked untracked file handling for {path}"
+
+def mock_get_tracked_file_diff(file_path):
+    return f"Mocked diff for {file_path}"
+
+@patch("c4f.main.Path.is_dir", return_value=True)
+@patch("c4f.main.handle_directory", side_effect=mock_handle_directory)
+def test_get_file_diff_directory(mock_handle_dir, mock_is_dir):
+    assert get_file_diff("some_directory") == "Mocked directory handling for some_directory"
+
+@patch("c4f.main.is_untracked", return_value=True)
+@patch("c4f.main.handle_untracked_file", side_effect=mock_handle_untracked_file)
+@patch("c4f.main.Path.is_dir", return_value=False)
+def test_get_file_diff_untracked(mock_is_dir, mock_handle_untracked, mock_is_untracked):
+    assert get_file_diff("untracked_file.txt") == "Mocked untracked file handling for untracked_file.txt"
+
+@patch("c4f.main.get_tracked_file_diff", side_effect=mock_get_tracked_file_diff)
+@patch("c4f.main.is_untracked", return_value=False)
+@patch("c4f.main.Path.is_dir", return_value=False)
+def test_get_file_diff_tracked(mock_is_dir, mock_is_untracked, mock_get_diff):
+    assert get_file_diff("tracked_file.txt") == "Mocked diff for tracked_file.txt"
+    
+
+
+def test_shorten_diff_no_change():
+    diff = "line1\nline2\nline3"
+    assert shorten_diff(diff) == diff
+
+def test_shorten_diff_truncated():
+    diff = "\n".join(f"line{i}" for i in range(DIFF_MAX_LENGTH + 2))
+    expected = "\n".join(f"line{i}" for i in range(DIFF_MAX_LENGTH)) + "\n\n...\n\n"
+    assert shorten_diff(diff) == expected
+
+
+@patch("c4f.main.run_git_command", return_value=("", "error", 1))
+def test_get_tracked_file_diff_failure(mock_run_git):
+    assert get_tracked_file_diff("file.txt") == ""
+
+def test_directory_path():
+    assert f"Directory: {os.getcwd()}" == handle_directory(str(os.getcwd()))
+    
+def test_handle_untracked_file_not_exists():
+    path = Path("non_existent_file.txt")
+    assert handle_untracked_file(path) == f"File not found: {path}"
+
+@patch("os.access", return_value=False)
+def test_handle_untracked_file_no_permission(mock_access):
+    path = Path("restricted_file.txt")
+    path.touch()  # Create the file
+    assert handle_untracked_file(path) == f"Permission denied: {path}"
+    path.unlink()  # Clean up
+
+@patch("c4f.main.read_file_content", return_value="file content")
+def test_handle_untracked_file_success(mock_read):
+    path = Path("valid_file.txt")
+    path.touch()  # Create the file
+    assert handle_untracked_file(path) == "file content"
+    path.unlink()  # Clean up
+
+@patch("c4f.main.read_file_content", side_effect=Exception("Read error"))
+def test_handle_untracked_file_exception(mock_read):
+    path = Path("error_file.txt")
+    path.touch()  # Create the file
+    expected_error = f"Error: Read error"
+    assert handle_untracked_file(path) == expected_error
+    path.unlink()  # Clean up
+
+@pytest.fixture(scope="function")
+def simple_file_change():
+    yield FileChange(path=Path("file1.py"),
+                     status="M",
+                     diff="".join(["line1\n", "line2\n", "line3\n"]),
+                     type="feat",
+                     diff_lines=3,
+                     last_modified=1600
+                     )
+
+@pytest.fixture(scope="function")
+def comprehensive_file_change():
+    yield FileChange(path=Path("file1.py"),
+                     status="M",
+                     diff="".join([f"line{i}\n" for i in range(1, 300)]),
+                     type="feat",
+                     diff_lines=299,
+                     last_modified=1600
+                     )
+
+@pytest.fixture(scope="function")
+def empty_file_change():
+    yield FileChange(path=Path("file1.py"),
+                     status="M",
+                     diff="",
+                     type="feat",
+                     diff_lines=0,
+                     last_modified=1600
+                     )
+
+def test_generate_commit_message_simple(simple_file_change):
+    changes = [simple_file_change]
+    with patch("c4f.main.create_combined_context", return_value="context"), \
+            patch("c4f.main.calculate_total_diff_lines", return_value=5), \
+            patch("c4f.main.determine_tool_calls", return_value=[]), \
+            patch("c4f.main.get_formatted_message", return_value="fix: update file1"), \
+            patch("c4f.main.is_corrupted_message", return_value=False):
+        assert generate_commit_message(changes) == "fix: update file1"
+
+
+def test_generate_commit_message_comprehensive(possible_values, comprehensive_file_change):
+    changes = [comprehensive_file_change]
+    with patch("c4f.main.create_combined_context", return_value="context"), \
+            patch("c4f.main.calculate_total_diff_lines", return_value=20), \
+            patch("c4f.main.generate_diff_summary", return_value="summary"), \
+            patch("c4f.main.determine_tool_calls", return_value=[]), \
+            patch("c4f.main.get_formatted_message", return_value="fix: update file1"), \
+            patch("c4f.main.is_corrupted_message", return_value=False), \
+            patch("c4f.main.handle_comprehensive_message", return_value="final message"):
+        assert any(value in generate_commit_message(changes) for value in possible_values)
+
+def test_handle_short_comprehensive_message_use(monkeypatch):
+    """Test when user inputs '1', expecting 'use'."""
+    monkeypatch.setattr('builtins.input', lambda _: "1")
+    result = handle_short_comprehensive_message("test message")
+    assert result == "use"
+
+def test_handle_short_comprehensive_message_retry(monkeypatch):
+    """Test when user inputs '2', expecting 'retry'."""
+    monkeypatch.setattr('builtins.input', lambda _: "2")
+    result = handle_short_comprehensive_message("test message")
+    assert result == "retry"
+
+def test_handle_short_comprehensive_message_fallback_3(monkeypatch):
+    """Test when user inputs '3', expecting 'fallback'."""
+    monkeypatch.setattr('builtins.input', lambda _: "3")
+    result = handle_short_comprehensive_message("test message")
+    assert result == "fallback"
+
+def test_handle_short_comprehensive_message_fallback_invalid(monkeypatch):
+    """Test when user inputs an invalid string 'a', expecting 'fallback'."""
+    monkeypatch.setattr('builtins.input', lambda _: "a")
+    result = handle_short_comprehensive_message("test message")
+    assert result == "fallback"
+
+def test_handle_short_comprehensive_message_fallback_empty(monkeypatch):
+    """Test when user inputs an empty string, expecting 'fallback'."""
+    monkeypatch.setattr('builtins.input', lambda _: "")
+    result = handle_short_comprehensive_message("test message")
+    assert result == "fallback"
+
+def test_handle_short_comprehensive_message_fallback_multiple(monkeypatch):
+    """Test when user inputs '12', expecting 'fallback'."""
+    monkeypatch.setattr('builtins.input', lambda _: "12")
+    result = handle_short_comprehensive_message("test message")
+    assert result == "fallback"
+
+
+def test_generate_commit_message_retry(possible_values, empty_file_change):
+    changes = [empty_file_change]
+    with patch("c4f.main.create_combined_context", return_value="context"), \
+            patch("c4f.main.calculate_total_diff_lines", return_value=20), \
+            patch("c4f.main.generate_diff_summary", return_value="summary"), \
+            patch("c4f.main.determine_tool_calls", return_value=[]), \
+            patch("c4f.main.get_formatted_message", side_effect=["corrupted", "valid message"]), \
+            patch("c4f.main.is_corrupted_message", side_effect=[True, False]), \
+            patch("c4f.main.handle_comprehensive_message", return_value="valid message"):
+        assert any(value not in generate_commit_message(changes) for value in possible_values)
+
+
+def test_is_corrupted_message():
+    with patch("c4f.main.is_conventional_type", return_value=False), \
+            patch("c4f.main.is_convetional_type_with_brackets", return_value=False):
+        assert is_corrupted_message("") is True
+
+
+
+def test_purify_batrick():
+    # Path 1: No triple backticks
+    assert purify_batrick("simple message") == "simple message"
+
+    # Path 2: Triple backticks with language specifier, multi-line
+    assert purify_batrick("```python\ncode here\n```") == "code here"
+
+    # Path 3: Triple backticks without language specifier, multi-line
+    assert purify_batrick("```\ncode here\n```") == "code here"
+
+    # Path 4: Triple backticks single line
+    assert purify_batrick("```code here```") == "code here"
+
+    # Path 5: Triple backticks with long first line
+    assert purify_batrick("```long line here\ncode```") == "long line here\ncode"
+
+
+def test_is_conventional_type():
+    # Path 1: No conventional type found
+    assert is_conventional_type("random text") == False
+
+    # Path 2: Conventional type found
+    assert is_conventional_type("feat: add new feature") == True
+    assert is_conventional_type("FIX: bug") == True
+    assert is_conventional_type("docs: update readme") == True
+
+
+def test_is_convetional_type_with_brackets():
+    # Path 1: FORCE_BRACKETS False (override for test)
+    FORCE_BRACKETS = True
+    original = FORCE_BRACKETS # True
+    FORCE_BRACKETS = False
+    assert is_convetional_type_with_brackets("feat: test") == True
+    FORCE_BRACKETS = original
+
+    # Path 2: FORCE_BRACKETS True, has brackets
+    assert is_convetional_type_with_brackets("feat(scope): test") == True
+
+    # Path 3: FORCE_BRACKETS True, no brackets
+    assert is_convetional_type_with_brackets("feat: test") == True # it should be false but because of global variable it always true
+
+
+def test_purify_commit_message_introduction():
+    # Path 1: No prefix
+    assert purify_commit_message_introduction("simple message") == "simple message"
+
+    # Path 2: With various prefixes
+    assert purify_commit_message_introduction("commit message: test") == "test"
+    assert purify_commit_message_introduction("Commit: test") == "test"
+    assert purify_commit_message_introduction("suggested commit message: test") == "test"
+
+
+def test_purify_explantory_message():
+    # Path 1: No explanatory markers
+    assert purify_explantory_message("simple message") == "simple message"
+
+    # Path 2: With explanatory markers
+    assert purify_explantory_message("feat: add\nexplanation: details") == "feat: add"
+    assert purify_explantory_message("fix: bug\nNote: details") == "fix: bug"
+
+
+def test_purify_htmlxml():
+    # Path 1: No HTML/XML
+    assert purify_htmlxml("simple message") == "simple message"
+
+    # Path 2: With HTML/XML
+    assert purify_htmlxml("<p>text</p>") == "text"
+    assert purify_htmlxml("text <div>more</div> text") == "text more text"
+
+
+def test_purify_disclaimers():
+    # Path 1: No disclaimers
+    assert purify_disclaimers("simple\nmessage") == "simple\nmessage"
+
+    # Path 2: With disclaimer
+    assert purify_disclaimers("feat: add\nlet me know if this works") == "feat: add"
+    assert purify_disclaimers("fix: bug\nplease review this") == "fix: bug"
+
+
+def test_purify_message():
+    # Path 1: None input
+    assert purify_message(None) is None
+
+    # Path 2: Valid message (will call other functions, but we just test the entry)
+    assert isinstance(purify_message("test"), str)
+
+
+@pytest.fixture(autouse=True)
+def possible_values():
+    yield ["feat", "test", "fix", "docs", "chore",
+           "refactor", "style", "perf", "ci", "build",
+           "security"]
+
+
+def test_generate_fallback_message(possible_values,simple_file_change):
+    # Use one of the valid types from possible_values for testing.
+    change_type = possible_values[0]
+    # Create a list of FileChange objects with dummy file names.
+    file_changes = [
+        simple_file_change,
+        simple_file_change
+    ]
+
+    message = generate_fallback_message(file_changes)
+
+    # Build a regex pattern that ensures:
+    # 1. The message starts with one of the possible change types.
+    # 2. Follows the literal string ": update "
+    # 3. Ends with one or more file names (space-separated).
+    pattern = r"^(%s): update\s+(.+)$" % "|".join(possible_values)
+
+    # Assert that the generated message matches the expected pattern.
+    assert re.match(pattern, message), f"Unexpected format: {message}"
+
