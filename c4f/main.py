@@ -37,7 +37,7 @@ FORCE_BRACKETS = False
 if FORCE_BRACKETS:
     warnings.warn("Forcing brackets can lead to longer commit message generation and failures.", UserWarning)
 
-ROOT: Final = r"E:\Projects\Languages\Python\c4f"
+ROOT: Final = r"E:\Projects\Languages\Python\Working On It\c4f"
 PROMPT_THRESHOLD: Final[int] = 80  # lines
 FALLBACK_TIMEOUT: Final[int] = 10  # secs
 MIN_COMPREHENSIVE_LENGTH: Final[int] = 50  # minimum length for comprehensive commit messages
