@@ -1,11 +1,30 @@
 [tool.poetry]
 name = "c4f"
-version = "0.1.0"
+version = "1.0.0"
 description = "A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes."
-authors = ["alaamer12 <ahmedmuhamed12@gmail.com>"]
+authors = ["Alaamer <ahmedmuhamed12@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{ include = "c4f" }]
+homepage = "https://github.com/alaamer12/c4f"
+repository = "https://github.com/alaamer12/c4f"
+documentation = "https://github.com/alaamer12/c4f"
+keywords = ["git", "commit", "ai", "conventional-commits", "developer-tools"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+packages = [{include = "c4f"}]
+
+[tool.poetry.scripts]
+c4f = "c4f.cli:main"
 
 [tool.poetry.dependencies]
 python = ">=3.9"
@@ -16,7 +35,6 @@ rich = "^13.9.4"
 pytest = "^8.3.5"
 coverage = "^7.7.1"
 mypy = "^1.15.0"
-pytest-cov = "^4.1.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -54,5 +72,5 @@ exclude_lines = [
     "    pass",
 ]
 ignore_errors = true
-fail_under = 80 # Set minimum coverage percentage
+fail_under = 85 # Set minimum coverage percentage
 show_missing = true
