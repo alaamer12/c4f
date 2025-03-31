@@ -101,3 +101,4 @@ wheels/
 *.egg
 /har_and_cookies/blackbox.json
 /poetry.lock
+/har_and_cookies/

@@ -5,8 +5,7 @@ description = "A sophisticated Git commit message generator that uses AI to crea
 authors = ["alaamer12 <ahmedmuhamed12@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "c4f"}]
-
+packages = [{ include = "c4f" }]
 
 [tool.poetry.dependencies]
 python = ">=3.9"
@@ -17,14 +16,19 @@ rich = "^13.9.4"
 pytest = "^8.3.5"
 coverage = "^7.7.1"
 mypy = "^1.15.0"
+pytest-cov = "^4.1.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+testpaths = "tests"
 asyncio_mode = "auto"
-addopts = "-ra -q --cov=true_generating"
+addopts = "-ra -q"
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
