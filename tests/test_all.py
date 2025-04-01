@@ -1,4 +1,3 @@
-
 from unittest.mock import patch, MagicMock, ANY
 
 import pytest
@@ -508,15 +507,6 @@ def test_display_changes():
         assert mock_print.called
 
 
-def test_handle_non_existent_git_repo():
-    with patch("c4f.main.os.path.exists", return_value=False), \
-            patch("c4f.main.sys.exit") as mock_exit, \
-            patch("c4f.main.console.print") as mock_print:
-        handle_non_existent_git_repo()
-        mock_print.assert_called_once_with("[red]Error: Not a git repository[/red]")
-        mock_exit.assert_called_once_with(1)
-
-
 def test_main():
     with patch("c4f.main.handle_non_existent_git_repo"), \
             patch("c4f.main.reset_staging"), \
@@ -901,14 +891,14 @@ def test_is_convetional_type_with_brackets():
     FORCE_BRACKETS = True
     original = FORCE_BRACKETS # True
     FORCE_BRACKETS = False
-    assert is_convetional_type_with_brackets("feat: test") == True
+    assert is_conventional_type_with_brackets("feat: test") == True
     FORCE_BRACKETS = original
 
     # Path 2: FORCE_BRACKETS True, has brackets
-    assert is_convetional_type_with_brackets("feat(scope): test") == True
+    assert is_conventional_type_with_brackets("feat(scope): test") == True
 
     # Path 3: FORCE_BRACKETS True, no brackets
-    assert is_convetional_type_with_brackets("feat: test") == True # it should be false but because of global variable it always true
+    assert is_conventional_type_with_brackets("feat: test") == True # it should be false but because of global variable it always true
 
 
 def test_purify_commit_message_introduction():
@@ -1200,8 +1190,8 @@ def test_is_conventional_type_with_brackets_force_disable():
         c4f.main.FORCE_BRACKETS = False
         
         # The function should return True regardless of input when FORCE_BRACKETS is False
-        assert is_convetional_type_with_brackets("feat: message without brackets") == True
-        assert is_convetional_type_with_brackets("feat(scope): message with brackets") == True
+        assert is_conventional_type_with_brackets("feat: message without brackets") == True
+        assert is_conventional_type_with_brackets("feat(scope): message with brackets") == True
     finally:
         # Restore original value
         c4f.main.FORCE_BRACKETS = original_force_brackets
@@ -1210,22 +1200,23 @@ def test_is_conventional_type_with_brackets_force_disable():
 # noinspection PyGlobalUndefined
 @pytest.mark.skip
 def test_is_conventional_type_with_brackets_force_enable():
-    """Test is_convetional_type_with_brackets with FORCE_BRACKETS set to True."""
-    global FORCE_BRACKETS
-    original_force_brackets = FORCE_BRACKETS
-    
+    """Test is_conventional_type_with_brackets with FORCE_BRACKETS set to True."""
+    global FORCE_BRACKETS  # Ensure we modify the global variable
+
+    original_force_brackets = FORCE_BRACKETS  # Store the original value
+
     try:
         # Set FORCE_BRACKETS to True for testing
         FORCE_BRACKETS = True
-        
+
         # With brackets should return True
-        assert is_convetional_type_with_brackets("feat(scope): message") == True
-        
+        assert is_conventional_type_with_brackets("feat(scope): message") is True
+
         # Without brackets should return False
-        assert is_convetional_type_with_brackets("feat: message") == False
+        assert is_conventional_type_with_brackets("feat: message") is False
     finally:
         # Restore original value
-        c4f.main.FORCE_BRACKETS = original_force_brackets
+        FORCE_BRACKETS = original_force_brackets
 
 
 def test_get_valid_changes_with_changes():
@@ -1355,3 +1346,142 @@ def test_handle_user_response_valid_responses():
         result = handle_user_response("e", group, message)
         mock_commit.assert_called_once_with(group, new_message)
         assert result is False
+
+def test_find_git_root_success():
+    """Test successful git root detection."""
+    mock_path = Path("/path/to/git/repo")
+    
+    with patch("c4f.main.run_git_command") as mock_run_git, \
+         patch("pathlib.Path.exists") as mock_exists, \
+         patch("pathlib.Path.resolve", return_value=mock_path):
+        
+        # Setup mocks
+        mock_run_git.return_value = (str(mock_path), "", 0)
+        mock_exists.side_effect = [True, True]  # For root_path.exists() and .git check
+        
+        # Test
+        result = find_git_root()
+        
+        # Verify
+        assert result == mock_path
+        mock_run_git.assert_called_once_with(["git", "rev-parse", "--show-toplevel"])
+        assert mock_exists.call_count == 2
+
+def test_find_git_root_command_error():
+    """Test when git command fails."""
+    with patch("c4f.main.run_git_command") as mock_run_git:
+        # Setup mock to simulate git command error
+        mock_run_git.return_value = ("", "fatal: not a git repository", 1)
+        
+        # Test
+        with pytest.raises(FileNotFoundError) as exc_info:
+            find_git_root()
+        
+        # Verify
+        assert "Git error: fatal: not a git repository" in str(exc_info.value)
+        mock_run_git.assert_called_once_with(["git", "rev-parse", "--show-toplevel"])
+
+def test_find_git_root_no_git_directory():
+    """Test when .git directory doesn't exist."""
+    mock_path = Path("/path/to/non/git/repo")
+    
+    with patch("c4f.main.run_git_command") as mock_run_git, \
+         patch("pathlib.Path.exists") as mock_exists, \
+         patch("pathlib.Path.resolve", return_value=mock_path):
+        
+        # Setup mocks
+        mock_run_git.return_value = (str(mock_path), "", 0)
+        mock_exists.side_effect = [True, False]  # root exists but .git doesn't
+        
+        # Test
+        with pytest.raises(FileNotFoundError) as exc_info:
+            find_git_root()
+        
+        # Verify
+        assert "Not a git repository" in str(exc_info.value)
+        assert mock_exists.call_count == 2
+
+def test_find_git_root_path_not_exists():
+    """Test when the returned path doesn't exist."""
+    mock_path = Path("/nonexistent/path")
+    
+    with patch("c4f.main.run_git_command") as mock_run_git, \
+         patch("pathlib.Path.exists") as mock_exists, \
+         patch("pathlib.Path.resolve", return_value=mock_path):
+        
+        # Setup mocks
+        mock_run_git.return_value = (str(mock_path), "", 0)
+        mock_exists.return_value = False  # Path doesn't exist
+        
+        # Test
+        with pytest.raises(FileNotFoundError) as exc_info:
+            find_git_root()
+        
+        # Verify
+        assert "Not a git repository" in str(exc_info.value)
+        mock_exists.assert_called_once()
+
+def test_find_git_root_general_exception():
+    """Test when an unexpected exception occurs."""
+    with patch("c4f.main.run_git_command") as mock_run_git:
+        # Setup mock to raise an unexpected exception
+        mock_run_git.side_effect = Exception("Unexpected error")
+        
+        # Test
+        with pytest.raises(FileNotFoundError) as exc_info:
+            find_git_root()
+        
+        # Verify
+        assert "Failed to determine git root: Unexpected error" in str(exc_info.value)
+        mock_run_git.assert_called_once()
+
+def test_handle_non_existent_git_repo_success():
+    """Test successful git repo handling."""
+    mock_path = Path("/path/to/git/repo")
+    
+    with patch("c4f.main.find_git_root", return_value=mock_path) as mock_find_root, \
+         patch("os.chdir") as mock_chdir:
+        
+        # Test
+        handle_non_existent_git_repo()
+        
+        # Verify
+        mock_find_root.assert_called_once()
+        mock_chdir.assert_called_once_with(mock_path)
+
+def test_handle_non_existent_git_repo_error():
+    """Test error handling in git repo verification."""
+    with patch("c4f.main.find_git_root") as mock_find_root, \
+         patch("c4f.main.console.print") as mock_print, \
+         patch("sys.exit") as mock_exit:
+        
+        # Setup mock to raise FileNotFoundError
+        error_msg = "Not a git repository"
+        mock_find_root.side_effect = FileNotFoundError(error_msg)
+        
+        # Test
+        handle_non_existent_git_repo()
+        
+        # Verify
+        mock_find_root.assert_called_once()
+        mock_print.assert_called_once_with(f"[red]Error: {error_msg}[/red]")
+        mock_exit.assert_called_once_with(1)
+
+def test_handle_non_existent_git_repo_chdir_error():
+    """Test when changing directory fails."""
+    mock_path = Path("/path/to/git/repo")
+    error_msg = "Permission denied"
+    
+    with patch("c4f.main.find_git_root", return_value=mock_path) as mock_find_root, \
+         patch("os.chdir", side_effect=OSError(error_msg)) as mock_chdir, \
+         patch("c4f.main.console.print") as mock_print, \
+         patch("sys.exit") as mock_exit:
+        
+        # Test
+        handle_non_existent_git_repo()
+        
+        # Verify
+        mock_find_root.assert_called_once()
+        mock_chdir.assert_called_once_with(mock_path)
+        mock_print.assert_called_once_with(f"[red]Error: Failed to change directory: {error_msg}[/red]")
+        mock_exit.assert_called_once_with(1)
