@@ -16,6 +16,7 @@ Arguments:
 
 import argparse
 from pathlib import Path
+import os
 
 # ASCII art banner for c4f
 BANNER = r"""
@@ -221,7 +222,16 @@ def parse_args() -> argparse.Namespace:
     add_generation_arguments(parser)
     add_formatting_arguments(parser)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # If root is specified, change to that directory
+    if args.root:
+        try:
+            os.chdir(args.root)
+        except (OSError, FileNotFoundError) as e:
+            parser.error(f"Failed to change to directory {args.root}: {str(e)}")
+
+    return args
 
 def main() -> None:
     """Main entry point for the CLI."""
@@ -234,7 +244,6 @@ def main() -> None:
             FALLBACK_TIMEOUT,
             ATTEMPT,
             MODEL,
-            ROOT,
             main as run_main
         )
 
@@ -244,14 +253,13 @@ def main() -> None:
             'FALLBACK_TIMEOUT': args.timeout,
             'ATTEMPT': args.attempts,
             'MODEL': args.model,
-            'ROOT': args.root
         })
 
-        # Run the main program
+        # Run the main program with the root argument
         run_main()
 
     except Exception as e:
-            raise e
+        raise e
 
 if __name__ == "__main__":
     main()

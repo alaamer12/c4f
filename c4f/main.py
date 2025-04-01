@@ -37,7 +37,6 @@ FORCE_BRACKETS = False
 if FORCE_BRACKETS:
     warnings.warn("Forcing brackets can lead to longer commit message generation and failures.", UserWarning)
 
-ROOT: Final = r"E:\Projects\Languages\Python\Working On It\c4f"
 PROMPT_THRESHOLD: Final[int] = 80  # lines
 FALLBACK_TIMEOUT: Final[int] = 10  # secs
 MIN_COMPREHENSIVE_LENGTH: Final[int] = 50  # minimum length for comprehensive commit messages
@@ -45,6 +44,7 @@ ATTEMPT: Final[int] = 3  # number of attempts
 DIFF_MAX_LENGTH: Final[int] = 100
 MODEL: Final[MODEL_TYPE] = g4f.models.gpt_4o_mini
 
+__dir__ = ["main", "FORCE_BRACKETS", "FALLBACK_TIMEOUT", "ATTEMPT", "MODEL"]
 
 @dataclass
 class FileChange:
@@ -296,7 +296,7 @@ def generate_commit_message(changes: List[FileChange]) -> str:
 def is_corrupted_message(message: str) -> bool:
     return (not message
             or not is_conventional_type(message)
-            or not is_convetional_type_with_brackets(message)
+            or not is_conventional_type_with_brackets(message)
             )
 
 
@@ -337,7 +337,7 @@ def is_conventional_type(message: str) -> bool:
     return True
 
 
-def is_convetional_type_with_brackets(message: str) -> bool:
+def is_conventional_type_with_brackets(message: str) -> bool:
     if not FORCE_BRACKETS:
         return True
 
@@ -767,10 +767,44 @@ def display_changes(changes: List[FileChange]):
     console.print(table)
 
 
-def handle_non_existent_git_repo():
-    os.chdir(ROOT)
-    if not os.path.exists(".git"):
-        console.print("[red]Error: Not a git repository[/red]")
+def find_git_root() -> Path:
+    """Find the root directory of the git repository.
+    
+    Returns:
+        Path: The absolute path to the git repository root
+        
+    Raises:
+        FileNotFoundError: If not in a git repository
+    """
+    try:
+        # Use git rev-parse to find the root of the repository
+        stdout, stderr, code = run_git_command(["git", "rev-parse", "--show-toplevel"])
+        if code != 0:
+            raise FileNotFoundError(f"Git error: {stderr}")
+        
+        # Get the absolute path and normalize it
+        root_path = Path(stdout.strip()).resolve()
+        
+        if not root_path.exists() or not (root_path / ".git").exists():
+            raise FileNotFoundError("Not a git repository")
+            
+        return root_path
+        
+    except Exception as e:
+        raise FileNotFoundError(f"Failed to determine git root: {str(e)}")
+
+
+def handle_non_existent_git_repo() -> None:
+    """Verify git repository exists and change to its root directory."""
+    try:
+        root = find_git_root()
+        try:
+            os.chdir(root)
+        except OSError as e:
+            console.print(f"[red]Error: Failed to change directory: {str(e)}[/red]")
+            sys.exit(1)
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
         sys.exit(1)
 
 
