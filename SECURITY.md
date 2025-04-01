@@ -13,7 +13,7 @@ Currently, these versions of C4F are supported with security updates:
 If you discover a security vulnerability in C4F, please follow these steps:
 
 1. **Do not** disclose the vulnerability publicly until it has been addressed.
-2. Email the details to [ahmedmuhamed12@gmail.com](mailto:ahmedmuhamed12@gmail.com) with the subject "C4F Security Vulnerability".
+2. Email the details to [ahmedmuhamed239@gmail.com](mailto:ahmedmuhamed239@gmail.com) with the subject "C4F Security Vulnerability".
 3. Include as much information as possible about the vulnerability:
    - Steps to reproduce
    - Potential impact
