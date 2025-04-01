@@ -1,0 +1,25 @@
+# Include license and readme files
+include LICENSE
+include README.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+include CODE_OF_CONDUCT.md
+include SECURITY.md
+include ROADMAP.md
+
+# Include documentation
+recursive-include docs *
+
+# Include test files
+recursive-include tests *.py
+
+# Include package data
+recursive-include c4f/data *
+
+# Exclude unnecessary files
+exclude .gitignore
+exclude .pre-commit-config.yaml
+recursive-exclude __pycache__ *
+recursive-exclude *.py[cod] *
+recursive-exclude *.so *
+recursive-exclude .* *
