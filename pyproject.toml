@@ -8,18 +8,60 @@ readme = "README.md"
 homepage = "https://github.com/alaamer12/c4f"
 repository = "https://github.com/alaamer12/c4f"
 documentation = "https://github.com/alaamer12/c4f"
-keywords = ["git", "commit", "ai", "conventional-commits", "developer-tools"]
+keywords = [
+    "git",
+    "commit",
+    "ai",
+    "artificial-intelligence",
+    "conventional-commits",
+    "developer-tools",
+    "automation",
+    "cli",
+    "command-line",
+    "productivity",
+    "version-control",
+    "commit-message",
+    "code-quality",
+    "workflow",
+    "git-tools",
+    "semantic-commits",
+    "devops",
+    "software-development",
+    "python-tool",
+    "git-automation",
+    "commit-history",
+    "code-documentation"
+]
+
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Topic :: Software Development :: Version Control :: Git",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Version Control",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+    "Framework :: Pytest",
 ]
 packages = [{include = "c4f"}]
 
@@ -74,3 +116,7 @@ exclude_lines = [
 ignore_errors = true
 fail_under = 85 # Set minimum coverage percentage
 show_missing = true
+
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/alaamer12/c4f/issues"
+"Changelog" = "https://github.com/alaamer12/c4f/blob/main/CHANGELOG.md"
