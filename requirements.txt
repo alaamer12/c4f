@@ -7,3 +7,4 @@ mypy
 pytest
 coverage
 poetry
+pyinstaller
