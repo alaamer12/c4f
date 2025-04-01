@@ -67,6 +67,7 @@ packages = [{include = "c4f"}]
 
 [tool.poetry.scripts]
 c4f = "c4f.cli:main"
+version = "scripts.release.update_version:cli"
 
 [tool.poetry.dependencies]
 python = ">=3.9"
