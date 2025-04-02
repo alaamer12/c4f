@@ -7,6 +7,10 @@ on:
     paths:
       - 'c4f/**'  # Only when the code changes
 
+# Add these permission settings
+permissions:
+  contents: write
+
 jobs:
   create-demo:
     runs-on: ubuntu-latest
@@ -96,9 +100,9 @@ jobs:
           EOF
         
       - name: Commit and push if demo changed
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add docs/assets/demo.gif docs/assets/launch-demo.sh docs/INTERACTIVE_DEMO.md
-          git commit -m "Update CLI demo assets" || echo "No changes to commit"
-          git push 
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Update CLI demo assets"
+          file_pattern: "docs/assets/demo.gif docs/assets/launch-demo.sh docs/INTERACTIVE_DEMO.md"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
