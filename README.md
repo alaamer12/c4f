@@ -1,6 +1,17 @@
-# Auto-Commit
+# C4F - Commit For Free
 
 A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes.
+
+```
+   _____ _  _     _____ 
+  / ____| || |   |  ___|
+ | |    | || |_  | |_   
+ | |    |__   _| |  _|  
+ | |____   | |   | |    
+  \_____|  |_|   |_|    
+                        
+ Commit For Free - AI-Powered Git Commit Message Generator
+```
 
 ## Features
 
@@ -15,23 +26,38 @@ A sophisticated Git commit message generator that uses AI to create meaningful, 
 
 ## Installation
 
-1. Clone the repository:
+### Using pip
+
 ```bash
-git clone https://github.com/yourusername/auto-commit.git
-cd auto-commit
+pip install c4f
 ```
 
-2. Install the required dependencies:
+### From source
+
+1. Clone the repository:
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/alaamer12/c4f.git
+cd c4f
+```
+
+2. Install using Poetry:
+```bash
+poetry install
+```
+
+Or with pip:
+```bash
+pip install -e .
 ```
 
 ## Usage
 
-Simply run the script in your Git repository:
+### Basic Usage
+
+Simply run the command in your Git repository:
 
 ```bash
-python main.py
+c4f
 ```
 
 The tool will:
@@ -39,6 +65,64 @@ The tool will:
 2. Analyze the changes and their context
 3. Generate an appropriate commit message using AI
 4. Stage and commit the changes with the generated message
+
+### Command-line Options
+
+```
+usage: c4f [-h] [-v] [-r PATH] [-m MODEL] [-a NUM] [-t SEC] [-f]
+
+Intelligent Git Commit Message Generator
+
+options:
+  -h, --help            Show this help message and exit
+  -v, --version         Show program's version number and exit
+  -r PATH, --root PATH  Set the root directory for git operations [default: current project root]
+  -m MODEL, --model MODEL
+                        Set the AI model to use for commit message generation [default: gpt-4-mini]
+                        Choices: gpt-4-mini, gpt-4, gpt-3.5-turbo
+
+Generation Options:
+  Configure the commit message generation process
+
+  -a NUM, --attempts NUM
+                        Set the number of generation attempts before falling back [default: 3]
+                        Range: 1-10
+  -t SEC, --timeout SEC
+                        Set the fallback timeout in seconds for model response [default: 10]
+                        Range: 1-60
+
+Formatting Options:
+  Configure the commit message format
+
+  -f, --force-brackets  Force conventional commit type with brackets (e.g., feat(scope): message)
+```
+
+### Examples
+
+Generate commit messages with the default settings:
+```bash
+c4f
+```
+
+Use a specific AI model:
+```bash
+c4f --model gpt-4
+```
+
+Set custom generation parameters:
+```bash
+c4f --attempts 5 --timeout 20
+```
+
+Force brackets in conventional commit format:
+```bash
+c4f --force-brackets
+```
+
+Specify a different root directory:
+```bash
+c4f --root /path/to/your/repo
+```
 
 ### Features in Detail
 
@@ -50,20 +134,22 @@ The tool will:
 
 ## Configuration
 
-Key configuration variables in `main.py`:
+Key configuration options available through command-line arguments:
 
-- `PROMPT_THRESHOLD = 80`: Line threshold for comprehensive vs. simple commit messages
-- `FALLBACK_TIMEOUT = 10`: Timeout in seconds for AI response
-- `MIN_COMPREHENSIVE_LENGTH = 50`: Minimum length for comprehensive commit messages
-- `ATTEMPT = 3`: Number of attempts for generating commit messages
-- `MODEL`: The AI model to use for generation (default: gpt_4o_mini)
+| Option             | Description                           | Default    |
+|--------------------|---------------------------------------|------------|
+| `--model`          | AI model to use                       | gpt-4-mini |
+| `--attempts`       | Number of message generation attempts | 3          |
+| `--timeout`        | Timeout in seconds for AI response    | 10         |
+| `--force-brackets` | Force brackets in conventional format | False      |
 
 ## Requirements
 
-- Python 3.6+
+- Python 3.9+
 - Git
-- Required Python packages (see requirements.txt)
-- Internet connection for AI model access
+- Required Python packages:
+  - g4f
+  - rich
 
 ## Contributing
 
@@ -71,9 +157,23 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes using the tool itself! 😉
+3. Commit your changes using c4f itself! 😉
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/alaamer12/c4f.git
+cd c4f
+
+# Install development dependencies
+poetry install --with dev
+
+# Run tests
+pytest
+```
 
 ## Model Compatibility 
 

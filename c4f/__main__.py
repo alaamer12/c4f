@@ -5,7 +5,7 @@ This module allows the package to be executed directly using:
 python -m c4f
 """
 
-from .cli import main
+from .cli import run_main
 
 if __name__ == "__main__":
-    main() 
+    run_main()

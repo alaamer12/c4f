@@ -1,5 +1,5 @@
 """
-CLI interface for c4f (Commit For Future) - An Intelligent Git Commit Message Generator.
+CLI interface for c4f (Commit For Free) - An Intelligent Git Commit Message Generator.
 
 This module provides a command-line interface for the c4f tool, allowing users to configure
 and customize the commit message generation process through various command-line arguments.
@@ -15,8 +15,13 @@ Arguments:
 """
 
 import argparse
-from pathlib import Path
 import os
+from pathlib import Path
+
+# Import main functionality here to avoid circular imports
+from c4f.main import main as run_main
+
+__all__ = ["run_main"]
 
 # ASCII art banner for c4f
 BANNER = r"""
@@ -27,7 +32,7 @@ BANNER = r"""
  | |____   | |   | |    
   \_____|  |_|   |_|    
                         
- Commit For Future - AI-Powered Git Commit Message Generator
+ Commit For Free - AI-Powered Git Commit Message Generator
 """
 
 # Define color codes for terminal output
@@ -236,30 +241,16 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Main entry point for the CLI."""
     args = parse_args()
+    # Update global constants based on CLI arguments
+    globals().update({
+        'FORCE_BRACKETS': args.force_brackets,
+        'FALLBACK_TIMEOUT': args.timeout,
+        'ATTEMPT': args.attempts,
+        'MODEL': args.model,
+    })
 
-    try:
-        # Import main functionality here to avoid circular imports
-        from c4f.main import (
-            FORCE_BRACKETS,
-            FALLBACK_TIMEOUT,
-            ATTEMPT,
-            MODEL,
-            main as run_main
-        )
-
-        # Update global constants based on CLI arguments
-        globals().update({
-            'FORCE_BRACKETS': args.force_brackets,
-            'FALLBACK_TIMEOUT': args.timeout,
-            'ATTEMPT': args.attempts,
-            'MODEL': args.model,
-        })
-
-        # Run the main program with the root argument
-        run_main()
-
-    except Exception as e:
-        raise e
+    # Run the main program with the root argument
+    run_main()
 
 if __name__ == "__main__":
     main()

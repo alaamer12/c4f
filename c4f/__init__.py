@@ -1,5 +1,5 @@
 """
-C4F (Commit For Future) - An Intelligent Git Commit Message Generator
+C4F (Commit For Free) - An Intelligent Git Commit Message Generator
 
 A sophisticated Git commit message generator that uses AI to create meaningful, 
 conventional commit messages based on your code changes.
@@ -30,7 +30,7 @@ Commands:
     - [a/all]: Accept all remaining commits without prompting
 
 Project Information:
-    Author: Ahmed Alaamer
+    Author: Alaamer
     Email: ahmedmuhamed12@gmail.com
     License: MIT
     Repository: https://github.com/alaamer12/c4f
@@ -39,16 +39,39 @@ Project Information:
     Keywords: git, commit, ai, conventional-commits, automation
 """
 
-__version__ = "0.1.0"
-__author__ = "Ahmed Alaamer"
+__version__ = "1.0.0"
+__author__ = "Alaamer"
 __email__ = "ahmedmuhamed12@gmail.com"
 __license__ = "MIT"
-__copyright__ = "Copyright 2024 Ahmed Alaamer"
+__copyright__ = "Copyright 2024 Alaamer"
 __github__ = "https://github.com/alaamer12/c4f"
-__description__ = "A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages."
-__python_requires__ = ">=3.9"
+__documentation__ = "https://github.com/alaamer12/c4f"
+__homepage__ = "https://github.com/alaamer12/c4f"
+__description__ = "A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes."
+__long_description__ = """
+C4F (Commit For Free) is an intelligent Git commit message generator that analyzes your code changes
+and automatically generates meaningful, conventional commit messages using AI.
 
-from .main import main
+It detects changed, added, and deleted files, smartly categorizes changes (feat, fix, docs, etc.),
+and provides an interactive commit process with manual override options.
+"""
+__python_requires__ = ">=3.9"
+__keywords__ = [
+    "git", "commit", "ai", "artificial-intelligence", "conventional-commits",
+    "developer-tools", "automation", "cli", "command-line", "productivity",
+    "version-control", "commit-message", "code-quality", "workflow",
+    "git-tools", "semantic-commits", "devops", "software-development",
+    "python-tool", "git-automation", "commit-history", "code-documentation"
+]
+
+__status__ = "Development/Stable"
+__project_urls__ = {
+    "Bug Tracker": "https://github.com/alaamer12/c4f/issues",
+    "Documentation": "https://github.com/alaamer12/c4f",
+    "Source Code": "https://github.com/alaamer12/c4f",
+}
+
+from .cli import run_main as main
 
 __all__ = [
     'main',
@@ -58,6 +81,12 @@ __all__ = [
     '__license__',
     '__copyright__',
     '__github__',
+    '__documentation__',
+    '__homepage__',
     '__description__',
-    '__python_requires__'
+    '__long_description__',
+    '__python_requires__',
+    '__keywords__',
+    '__status__',
+    '__project_urls__'
 ]

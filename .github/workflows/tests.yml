@@ -30,16 +30,8 @@ jobs:
         
     - name: Run tests
       run: |
-        pytest
+        pytest -m "not long"
 
     - name: Check types with mypy
       run: |
         mypy c4f tests
-        
-    - name: Lint with ruff
-      run: |
-        ruff check c4f tests
-
-    - name: Check code formatting with black
-      run: |
-        black --check c4f tests

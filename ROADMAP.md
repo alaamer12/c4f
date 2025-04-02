@@ -1,6 +1,6 @@
 # C4F Roadmap
 
-This document outlines the planned features and improvements for future releases of C4F (Commit For Future). Our goal is to continuously enhance the tool's capabilities while maintaining its simplicity and effectiveness.
+This document outlines the planned features and improvements for future releases of C4F (Commit For Free). Our goal is to continuously enhance the tool's capabilities while maintaining its simplicity and effectiveness.
 
 ## Planned Features
 
