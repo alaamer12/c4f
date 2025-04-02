@@ -24,6 +24,15 @@ jobs:
           pip install poetry
           poetry install
           
+      - name: Install ttyd
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git libjson-c-dev libwebsockets-dev
+          git clone https://github.com/tsl0922/ttyd.git
+          cd ttyd && mkdir build && cd build
+          cmake ..
+          make && sudo make install
+          
       - name: Install VHS
         run: |
           sudo apt-get update
@@ -59,10 +68,37 @@ jobs:
       - name: Run VHS
         run: vhs demo.tape
         
+      - name: Create ttyd demo script
+        run: |
+          mkdir -p docs/assets
+          cat > docs/assets/launch-demo.sh << 'EOF'
+          #!/bin/bash
+          ttyd -p 8080 -o -W bash -c "echo 'Welcome to c4f interactive demo!'; echo 'Try running: c4f --help'; bash"
+          EOF
+          chmod +x docs/assets/launch-demo.sh
+          
+          cat >> docs/INTERACTIVE_DEMO.md << 'EOF'
+          # Interactive Demo
+          
+          You can try c4f with an interactive terminal demo by running:
+          
+          ```bash
+          # Install ttyd first
+          # On macOS: brew install ttyd
+          # On Ubuntu/Debian: sudo apt install ttyd
+          # Or build from source: https://github.com/tsl0922/ttyd
+          
+          # Then run the demo script
+          ./docs/assets/launch-demo.sh
+          ```
+          
+          Then open your browser to http://localhost:8080
+          EOF
+        
       - name: Commit and push if demo changed
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add docs/assets/demo.gif
-          git commit -m "Update CLI demo gif" || echo "No changes to commit"
+          git add docs/assets/demo.gif docs/assets/launch-demo.sh docs/INTERACTIVE_DEMO.md
+          git commit -m "Update CLI demo assets" || echo "No changes to commit"
           git push 
