@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "commit-for-free"
-version = "1.0.0.post1"
+version = "1.0.1"
 description = "A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes."
 authors = ["Alaamer <ahmedmuhamed12@gmail.com>"]
 license = "MIT"
