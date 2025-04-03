@@ -1,5 +1,5 @@
 """
-Auto-Commit: An Intelligent Git Commit Message Generator
+Commit For Free: An Intelligent Git Commit Message Generator
 
 This module provides an automated solution for generating meaningful Git commit messages
 based on the changes in your repository. It analyzes file changes, categorizes them by type,
@@ -84,10 +84,25 @@ def parse_git_status() -> List[Tuple[str, str]]:
         # Handle untracked files (marked as '??')
         if status == "??":
             status = "A"  # Treat untracked as new/added files
+            path = Path(file_path)
+            if path.is_dir():
+                # For untracked directories, add all files recursively
+                for file in list_untracked_files(path):
+                    changes.append((status, str(file)))
+                continue  # Skip adding the directory itself
         elif status == "R":
             file_path = file_path.split(" -> ")[1]
         changes.append((status, file_path))
     return changes
+
+
+def list_untracked_files(directory: Path) -> List[Path]:
+    """Recursively list all files in an untracked directory."""
+    files = []
+    for item in directory.glob('**/*'):
+        if item.is_file():
+            files.append(item)
+    return files
 
 
 def get_file_diff(file_path: str) -> str:
@@ -121,6 +136,13 @@ def get_tracked_file_diff(file_path: str) -> str:
 
 
 def handle_directory(file_path: str) -> str:
+    """Handle directories in diff generation."""
+    path = Path(file_path)
+    
+    # If it's an untracked directory, we'll handle the files individually
+    if is_untracked(file_path) and path.is_dir():
+        return f"Untracked directory: {file_path}"
+    
     return f"Directory: {file_path}"
 
 
