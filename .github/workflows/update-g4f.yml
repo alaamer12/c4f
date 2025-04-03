@@ -1,0 +1,102 @@
+name: Update g4f Dependency
+
+on:
+  schedule:
+    # Run once a week on Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  # Allow manual triggers
+  workflow_dispatch:
+
+jobs:
+  update-g4f:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry install
+
+      - name: Check g4f version
+        id: check-version
+        run: |
+          # Get current g4f version from pyproject.toml
+          CURRENT_VERSION=$(grep -oP 'g4f = "\K[^"]+' pyproject.toml || echo "not-found")
+          echo "Current g4f version: $CURRENT_VERSION"
+          
+          # Get latest g4f version from PyPI
+          LATEST_VERSION=$(pip index versions g4f 2>/dev/null | grep -oP 'Available versions: \K[^,]+' || echo "not-found")
+          echo "Latest g4f version: $LATEST_VERSION"
+          
+          # Set outputs
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          
+          # Set needs_update flag
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "not-found" ] && [ "$CURRENT_VERSION" != "not-found" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            if [ "$CURRENT_VERSION" == "not-found" ]; then
+              echo "::warning::Could not determine current g4f version in pyproject.toml"
+            fi
+            if [ "$LATEST_VERSION" == "not-found" ]; then
+              echo "::warning::Could not fetch latest g4f version from PyPI"
+            fi
+          fi
+
+      - name: Update g4f version if needed
+        if: steps.check-version.outputs.needs_update == 'true'
+        run: |
+          # Update g4f version
+          poetry add g4f@${{ steps.check-version.outputs.latest_version }}
+          # Verify update was successful
+          UPDATED_VERSION=$(grep -oP 'g4f = "\K[^"]+' pyproject.toml || echo "not-found")
+          if [ "$UPDATED_VERSION" != "${{ steps.check-version.outputs.latest_version }}" ]; then
+            echo "::error::Failed to update g4f version in pyproject.toml"
+            exit 1
+          fi
+
+      - name: Run tests to verify compatibility
+        if: steps.check-version.outputs.needs_update == 'true'
+        run: |
+          poetry run pytest -xvs tests/
+
+      - name: Create Pull Request
+        if: steps.check-version.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(deps): update g4f from ${{ steps.check-version.outputs.current_version }} to ${{ steps.check-version.outputs.latest_version }}"
+          branch: "deps/update-g4f"
+          delete-branch: true
+          title: "chore(deps): update g4f from ${{ steps.check-version.outputs.current_version }} to ${{ steps.check-version.outputs.latest_version }}"
+          body: |
+            ## Dependency Update
+            
+            This PR updates the g4f dependency from version ${{ steps.check-version.outputs.current_version }} to ${{ steps.check-version.outputs.latest_version }}.
+            
+            ### Changes in g4f
+            - Please review the [g4f changelog](https://github.com/xtekky/gpt4free/blob/main/CHANGELOG.md) for detailed changes
+            
+            ### Verification
+            - ✅ All tests have passed with the updated dependency
+            - 📦 The dependency has been successfully updated in pyproject.toml
+            
+            This PR was created automatically by the g4f update workflow.
+          labels: |
+            dependencies
+            automated pr
