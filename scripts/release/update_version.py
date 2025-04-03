@@ -2,7 +2,7 @@ import sys
 import re
 import argparse
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 # Add the project root directory to Python path
 PROJECT_NAME = "c4f"
@@ -29,22 +29,77 @@ def write_file_content(file_path: Path, content: str) -> None:
     with open(file_path, 'w') as f:
         f.write(content)
 
+def parse_version(version_str: str) -> Tuple[int, int, int, str, int]:
+    """Parse version string into components including post-release info."""
+    # Check for post-release format
+    post_match = re.match(r'(\d+\.\d+\.\d+)(?:\.post\.(\d+)|\.post(\d+)|-post(\d+))?$', version_str)
+    if not post_match:
+        raise ValueError(f"Invalid version format: {version_str}")
+    
+    main_version, post_dot, post_num, post_dash = post_match.groups()
+    major, minor, patch = map(int, main_version.split('.'))
+    
+    # Determine post-release number
+    post_release = 0
+    if post_dot:
+        post_release = int(post_dot)
+    elif post_num:
+        post_release = int(post_num)
+    elif post_dash:
+        post_release = int(post_dash)
+    
+    return major, minor, patch, "post", post_release
+
+def format_version(major: int, minor: int, patch: int, release_type: str = "", release_num: int = 0) -> str:
+    """Format version components into a version string."""
+    base_version = f"{major}.{minor}.{patch}"
+    
+    if release_type == "post" and release_num > 0:
+        return f"{base_version}.post.{release_num}"
+    
+    return base_version
+
 def get_version_increment(current_version: str, increment_type: str) -> str:
     """Calculate new version based on increment type."""
-    major, minor, patch = map(int, current_version.split('.'))
-
+    try:
+        major, minor, patch, rel_type, rel_num = parse_version(current_version)
+    except ValueError:
+        # Fallback to basic version parsing if post-release format is not detected
+        major, minor, patch = map(int, current_version.split('.'))
+        rel_type, rel_num = "", 0
+    
     if increment_type.lower() == 'major':
         return f"{major + 1}.0.0"
     elif increment_type.lower() == 'minor':
         return f"{major}.{minor + 1}.0"
     elif increment_type.lower() == 'patch':
         return f"{major}.{minor}.{patch + 1}"
+    elif increment_type.lower() == 'post':
+        # For post-release, increment the post number or start at 1
+        if rel_type == "post":
+            return format_version(major, minor, patch, "post", rel_num + 1)
+        else:
+            return format_version(major, minor, patch, "post", 1)
     else:
         raise ValueError("Invalid version increment type")
 
 def get_version_decrement(current_version: str) -> str:
-    """Calculate previous version by decrementing patch number."""
-    major, minor, patch = map(int, current_version.split('.'))
+    """Calculate previous version by decrementing version number."""
+    try:
+        major, minor, patch, rel_type, rel_num = parse_version(current_version)
+    except ValueError:
+        # Fallback to basic version parsing if post-release format is not detected
+        major, minor, patch = map(int, current_version.split('.'))
+        rel_type, rel_num = "", 0
+    
+    # First handle post-release decrement
+    if rel_type == "post" and rel_num > 1:
+        return format_version(major, minor, patch, "post", rel_num - 1)
+    elif rel_type == "post" and rel_num == 1:
+        # Remove post-release suffix entirely
+        return f"{major}.{minor}.{patch}"
+    
+    # If no post-release or post-release is already at 1, decrement the main version
     if patch > 0:
         return f"{major}.{minor}.{patch - 1}"
     elif minor > 0:
@@ -96,11 +151,23 @@ def get_current_version(file_path: Path) -> str:
     try:
         content = read_file_content(file_path)
         
-        # Try different version patterns
+        # Try different version patterns, including post-release formats
         patterns = [
-            r'version\s*=\s*["\']?(\d+\.\d+\.\d+)["\']?',  # Matches: version = "X.Y.Z" or version = X.Y.Z
-            r'__version__\s*=\s*["\'](\d+\.\d+\.\d+)["\']',  # Matches: __version__ = "X.Y.Z"
-            r'VERSION\s*=\s*["\'](\d+\.\d+\.\d+)["\']',  # Matches: VERSION = "X.Y.Z"
+            r'version\s*=\s*["\']?(\d+\.\d+\.\d+(?:\.post\.\d+|\.post\d+|-post\d+)?)["\']?',
+            r'__version__\s*=\s*["\'](\d+\.\d+\.\d+(?:\.post\.\d+|\.post\d+|-post\d+)?)["\']',
+            r'VERSION\s*=\s*["\'](\d+\.\d+\.\d+(?:\.post\.\d+|\.post\d+|-post\d+)?)["\']',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, content)
+            if match:
+                return match.group(1)
+        
+        # Fallback to traditional version patterns without post-release
+        patterns = [
+            r'version\s*=\s*["\']?(\d+\.\d+\.\d+)["\']?',
+            r'__version__\s*=\s*["\'](\d+\.\d+\.\d+)["\']',
+            r'VERSION\s*=\s*["\'](\d+\.\d+\.\d+)["\']',
         ]
         
         for pattern in patterns:
@@ -126,12 +193,13 @@ def get_increment_type() -> str:
     print(styles.OPTION("major - For significant changes"))
     print(styles.OPTION("minor - For new features"))
     print(styles.OPTION("patch - For bug fixes"))
+    print(styles.OPTION("post  - For post-release updates"))
     
     while True:
-        increment_type = input(styles.PROMPT("Choose version type (major/minor/patch): ")).lower()
-        if increment_type in ['major', 'minor', 'patch']:
+        increment_type = input(styles.PROMPT("Choose version type (major/minor/patch/post): ")).lower()
+        if increment_type in ['major', 'minor', 'patch', 'post']:
             return increment_type
-        print(styles.ERROR("Invalid input. Please choose 'major', 'minor', or 'patch'"))
+        print(styles.ERROR("Invalid input. Please choose 'major', 'minor', 'patch', or 'post'"))
 
 def check_version_consistency(files: List[Path], quiet: bool = False) -> str:
     """Check if all files have the same version number."""
@@ -241,7 +309,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Version management tool for Python projects. Updates or rolls back version numbers in common project files."
     )
-    parser.add_argument("-t", "--type", choices=["major", "minor", "patch"], 
+    parser.add_argument("-t", "--type", choices=["major", "minor", "patch", "post"], 
                        help="Type of version increment")
     parser.add_argument("-q", "--quiet", action="store_true", 
                        help="Suppress output messages")
