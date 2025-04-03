@@ -2,16 +2,19 @@ name: Python Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # Add explicit timeout
     strategy:
       matrix:
-        python-version: [3.9, 3.10, 3.11]
+        python-version: ["3.11", "3.12", "3.13"]
+      # Note: Proper type annotations required for Python 3.11+
+      fail-fast: false  # Continue other tests if one version fails
 
     steps:
     - uses: actions/checkout@v3
@@ -24,14 +27,15 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install poetry
+        pip install poetry pytest mypy
         poetry config virtualenvs.create false
         poetry install --with dev
         
     - name: Run tests
       run: |
-        pytest -m "not long"
-
+        python -m pytest -m "not long" --rootdir=. -v
+        
     - name: Check types with mypy
+      if: always()  # Run even if tests fail
       run: |
         mypy c4f tests

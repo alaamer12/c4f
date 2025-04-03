@@ -1,4 +1,6 @@
 """Shared styling for CLI scripts."""
+from typing import Optional
+
 from colorama import Fore, Style, init
 
 # Initialize colorama
@@ -51,7 +53,7 @@ class Styles:
     CHANGELOG_SECTION = lambda text: f"{Fore.MAGENTA}{Icons.PENCIL} {text}{Style.RESET_ALL}"
     CHANGELOG_ENTRY = lambda text: f"{Fore.WHITE}{Icons.BULLET} {text}{Style.RESET_ALL}"
 
-def print_header(text: str, subtext: str = None) -> None:
+def print_header(text: str, subtext: Optional[str] = None) -> None:
     """Print a formatted header with optional subtext."""
     print(Styles.HEADER(text))
     if subtext:

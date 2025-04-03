@@ -30,6 +30,7 @@ from rich.table import Table
 console = Console()
 client = Client()
 
+
 MODEL_TYPE = Union[g4f.Model, g4f.models, str]
 
 # ROOT = Path(__file__).parent

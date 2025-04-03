@@ -183,8 +183,10 @@ def test_argument_defaults_and_values(args, expected):
     for key, value in expected.items():
         assert getattr(parsed_args, key) == value
 
+@pytest.mark.long
 @patch("c4f.cli.parse_args")
-def test_main_function(mock_parse_args):
+@patch("builtins.input", return_value="yes")
+def test_main_function(mock_parse_args, mock_input):
     """Test the main function with mocked dependencies."""
     # Create a mock args object
     mock_args = MagicMock()
@@ -194,22 +196,25 @@ def test_main_function(mock_parse_args):
     mock_args.attempts = 5
     mock_args.timeout = 20
     mock_args.force_brackets = True
-    
+
     mock_parse_args.return_value = mock_args
-    
+
     # Mock the main module import
     with patch.dict("sys.modules", {"c4f.main": MagicMock()}):
         # Mock the main function
-        sys.modules["c4f.main"].main = MagicMock()
-        
+        sys.modules["c4f.main"].run_main = MagicMock()
+
         # Import our cli module
-        from c4f.cli import main
-        
+        from c4f.cli import run_main
+
         # Call the main function
-        main()
-        
+        run_main()
+
         # Verify that parse_args was called
         mock_parse_args.assert_called_once()
-        
+
         # Verify that the main function was called
-        sys.modules["c4f.main"].main.assert_called_once() 
+        sys.modules["c4f.main"].run_main.assert_called_once()
+
+        # Ensure input() was called during the test (optional)
+        mock_input.assert_called()

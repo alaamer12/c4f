@@ -88,9 +88,14 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 testpaths = "tests"
-asyncio_mode = "auto"
 addopts = "-ra -q"
-asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "long: marks tests as long-running (use '-m long' to run them)"
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:g4f.requests.aiohttp:34",
+    "ignore::DeprecationWarning:aiohttp.client:1425"
+]
 
 [tool.coverage.run]
 branch = true

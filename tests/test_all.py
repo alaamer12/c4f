@@ -1,5 +1,6 @@
-from unittest.mock import patch, MagicMock, ANY
+# mypy: ignore-errors
 
+from unittest.mock import patch, MagicMock, ANY
 import pytest
 
 import c4f
@@ -854,7 +855,7 @@ def test_generate_commit_message_retry(possible_values, empty_file_change):
 
 def test_is_corrupted_message():
     with patch("c4f.main.is_conventional_type", return_value=False), \
-            patch("c4f.main.is_convetional_type_with_brackets", return_value=False):
+            patch("c4f.main.is_conventional_type_with_brackets", return_value=False):
         assert is_corrupted_message("") is True
 
 
@@ -1198,7 +1199,7 @@ def test_is_conventional_type_with_brackets_force_disable():
 
 
 # noinspection PyGlobalUndefined
-@pytest.mark.skip
+@pytest.mark.long
 def test_is_conventional_type_with_brackets_force_enable():
     """Test is_conventional_type_with_brackets with FORCE_BRACKETS set to True."""
     global FORCE_BRACKETS  # Ensure we modify the global variable
