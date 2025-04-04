@@ -35,6 +35,7 @@ BANNER = r"""
  Commit For Free - AI-Powered Git Commit Message Generator
 """
 
+
 # Define color codes for terminal output
 class Colors:
     HEADER = '\033[95m'
@@ -96,6 +97,7 @@ class ColoredHelpFormatter(argparse.RawDescriptionHelpFormatter):
 
         return text
 
+
 def create_argument_parser(color: bool = True) -> argparse.ArgumentParser:
     """Create and configure the argument parser for the CLI.
 
@@ -118,6 +120,7 @@ def create_argument_parser(color: bool = True) -> argparse.ArgumentParser:
     )
     return parser
 
+
 def add_version_argument(parser: argparse.ArgumentParser) -> None:
     """Add version argument to the parser.
 
@@ -130,6 +133,7 @@ def add_version_argument(parser: argparse.ArgumentParser) -> None:
         version="%(prog)s 1.0.0",
         help="Show program's version number and exit"
     )
+
 
 def add_directory_argument(parser: argparse.ArgumentParser) -> None:
     """Add root directory argument to the parser.
@@ -145,6 +149,7 @@ def add_directory_argument(parser: argparse.ArgumentParser) -> None:
         metavar="PATH",
         dest="root"
     )
+
 
 def add_model_argument(parser: argparse.ArgumentParser) -> None:
     """Add AI model argument to the parser.
@@ -162,13 +167,15 @@ def add_model_argument(parser: argparse.ArgumentParser) -> None:
         dest="model"
     )
 
+
 def add_generation_arguments(parser: argparse.ArgumentParser) -> None:
     """Add arguments related to message generation.
 
     Args:
         parser (argparse.ArgumentParser): The argument parser to add the generation arguments to.
     """
-    generation_group = parser.add_argument_group('Generation Options', 'Configure the commit message generation process')
+    generation_group = parser.add_argument_group('Generation Options',
+                                                 'Configure the commit message generation process')
 
     generation_group.add_argument(
         "-a", "--attempts",
@@ -190,6 +197,7 @@ def add_generation_arguments(parser: argparse.ArgumentParser) -> None:
         dest="timeout"
     )
 
+
 def add_formatting_arguments(parser: argparse.ArgumentParser) -> None:
     """Add arguments related to commit message formatting.
 
@@ -204,6 +212,7 @@ def add_formatting_arguments(parser: argparse.ArgumentParser) -> None:
         help="Force conventional commit type with brackets (e.g., feat(scope): message)",
         dest="force_brackets"
     )
+
 
 def parse_args() -> argparse.Namespace:
     """Create parser, add arguments, and parse command line arguments.
@@ -238,6 +247,7 @@ def parse_args() -> argparse.Namespace:
 
     return args
 
+
 def main() -> None:
     """Main entry point for the CLI."""
     args = parse_args()
@@ -251,6 +261,7 @@ def main() -> None:
 
     # Run the main program with the root argument
     run_main()
+
 
 if __name__ == "__main__":
     main()

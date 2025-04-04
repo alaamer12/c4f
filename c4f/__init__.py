@@ -35,15 +35,15 @@ Project Information:
     License: MIT
     Repository: https://github.com/alaamer12/c4f
     Documentation: https://github.com/alaamer12/c4f
-    Python Support: >=3.9
+    Python Support: >=3.11
     Keywords: git, commit, ai, conventional-commits, automation
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __author__ = "Alaamer"
 __email__ = "ahmedmuhamed12@gmail.com"
 __license__ = "MIT"
-__copyright__ = "Copyright 2024 Alaamer"
+__copyright__ = "Copyright 2025 Alaamer"
 __github__ = "https://github.com/alaamer12/c4f"
 __documentation__ = "https://github.com/alaamer12/c4f"
 __homepage__ = "https://github.com/alaamer12/c4f"
@@ -54,8 +54,11 @@ and automatically generates meaningful, conventional commit messages using AI.
 
 It detects changed, added, and deleted files, smartly categorizes changes (feat, fix, docs, etc.),
 and provides an interactive commit process with manual override options.
+
+C4F depends on g4f (GPT4Free) to generate the commit messages, providing a free alternative to
+paid AI services while maintaining high-quality commit message generation.
 """
-__python_requires__ = ">=3.9"
+__python_requires__ = ">=3.11"
 __keywords__ = [
     "git", "commit", "ai", "artificial-intelligence", "conventional-commits",
     "developer-tools", "automation", "cli", "command-line", "productivity",
@@ -69,7 +72,13 @@ __project_urls__ = {
     "Bug Tracker": "https://github.com/alaamer12/c4f/issues",
     "Documentation": "https://github.com/alaamer12/c4f",
     "Source Code": "https://github.com/alaamer12/c4f",
+    "Changelog": "https://github.com/alaamer12/c4f/blob/main/CHANGELOG.md",
+    "Contributing": "https://github.com/alaamer12/c4f/blob/main/CONTRIBUTING.md"
 }
+
+__release_date__ = "2025-04-03"
+__maintainer__ = "Alaamer"
+__maintainer_email__ = "ahmedmuhamed12@gmail.com"
 
 from .cli import run_main as main
 
@@ -88,5 +97,8 @@ __all__ = [
     '__python_requires__',
     '__keywords__',
     '__status__',
-    '__project_urls__'
+    '__project_urls__',
+    '__release_date__',
+    '__maintainer__',
+    '__maintainer_email__',
 ]
