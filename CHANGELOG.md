@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2025-03-29
+## [1.0.2] - 2025-04-4
+
+### Added
+- Improved type annotations throughout the codebase
+- Enhanced documentation with Google-style docstrings
+
+### Fixed
+- Resolved building issues in package distribution
+
+## [1.0.1] - 2025-04-3
+
+### Fixed
+- Resolved issue with metadata files not being included in package distribution
+- Fixed configuration in pyproject.toml to properly include unversioned files (CHANGELOG.md, CODE_OF_CONDUCT.md, etc.)
+- Removed duplicate include directive from poetry.urls section
+
+## [1.0.0] - 2025-03-29
 
 ### Added
 - Initial release of C4F

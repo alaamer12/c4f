@@ -29,7 +29,20 @@ A sophisticated Git commit message generator that uses AI to create meaningful, 
 ### Using pip
 
 ```bash
-pip install c4f
+pip install commit-for-free
+```
+
+### Using pipx (Recommended for non-Windows platforms)
+
+For a clean, isolated installation that doesn't interfere with your system Python:
+
+```bash
+# Install pipx if you don't have it
+python -m pip install --user pipx
+python -m pipx ensurepath
+
+# Install c4f
+pipx install commit-for-free
 ```
 
 ### From source
@@ -69,13 +82,11 @@ The tool will:
 ### Command-line Options
 
 ```
-usage: c4f [-h] [-v] [-r PATH] [-m MODEL] [-a NUM] [-t SEC] [-f]
+usage: c4f [-r PATH] [-m MODEL] [-a NUM] [-t SEC] [-f]
 
 Intelligent Git Commit Message Generator
 
 options:
-  -h, --help            Show this help message and exit
-  -v, --version         Show program's version number and exit
   -r PATH, --root PATH  Set the root directory for git operations [default: current project root]
   -m MODEL, --model MODEL
                         Set the AI model to use for commit message generation [default: gpt-4-mini]
@@ -145,7 +156,7 @@ Key configuration options available through command-line arguments:
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.11+
 - Git
 - Required Python packages:
   - g4f
@@ -173,6 +184,9 @@ poetry install --with dev
 
 # Run tests
 pytest
+
+# Run Coverage
+coverage -m pytest
 ```
 
 ## Model Compatibility 
@@ -189,6 +203,18 @@ For the best experience, we recommend using one of the officially supported mode
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE file](LICENSE) for details.
+
+## Changelog
+
+See the [CHANGELOG.md](CHANGELOG.md) file for details about version history and updates.
+
+## Security
+
+Please review our [SECURITY.md](SECURITY.md) file for information about:
+- How to report security vulnerabilities
+- Our responsible disclosure policy
+- Security best practices when using this tool
+- Dependency tracking and security audits
 
 ## Acknowledgments
 
