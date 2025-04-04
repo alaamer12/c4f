@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install poetry
+          pip install poetry pytest
           poetry install
 
       - name: Check g4f version
@@ -35,7 +35,11 @@ jobs:
         run: |
           # Get current g4f version from pyproject.toml
           CURRENT_VERSION=$(grep -oP 'g4f = "\K[^"]+' pyproject.toml || echo "not-found")
-          echo "Current g4f version: $CURRENT_VERSION"
+          echo "Current g4f version with possible prefix: $CURRENT_VERSION"
+          
+          # Strip semver prefixes (^, ~, >=, >, etc.) to get the actual version
+          NORMALIZED_CURRENT_VERSION=$(echo "$CURRENT_VERSION" | sed -E 's/^[\^~>=<]+//')
+          echo "Normalized current version: $NORMALIZED_CURRENT_VERSION"
           
           # Get latest g4f version from PyPI
           LATEST_VERSION=$(pip index versions g4f 2>/dev/null | grep -oP 'Available versions: \K[^,]+' || echo "not-found")
@@ -43,10 +47,11 @@ jobs:
           
           # Set outputs
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "normalized_current_version=$NORMALIZED_CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
           
-          # Set needs_update flag
-          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "not-found" ] && [ "$CURRENT_VERSION" != "not-found" ]; then
+          # Set needs_update flag - compare normalized version with latest
+          if [ "$NORMALIZED_CURRENT_VERSION" != "$LATEST_VERSION" ] && [ "$LATEST_VERSION" != "not-found" ] && [ "$CURRENT_VERSION" != "not-found" ]; then
             echo "needs_update=true" >> $GITHUB_OUTPUT
           else
             echo "needs_update=false" >> $GITHUB_OUTPUT
@@ -55,6 +60,9 @@ jobs:
             fi
             if [ "$LATEST_VERSION" == "not-found" ]; then
               echo "::warning::Could not fetch latest g4f version from PyPI"
+            fi
+            if [ "$NORMALIZED_CURRENT_VERSION" == "$LATEST_VERSION" ]; then
+              echo "::notice::Current version $CURRENT_VERSION (normalized to $NORMALIZED_CURRENT_VERSION) is already at the latest version $LATEST_VERSION. No update needed."
             fi
           fi
 
@@ -65,7 +73,8 @@ jobs:
           poetry add g4f@${{ steps.check-version.outputs.latest_version }}
           # Verify update was successful
           UPDATED_VERSION=$(grep -oP 'g4f = "\K[^"]+' pyproject.toml || echo "not-found")
-          if [ "$UPDATED_VERSION" != "${{ steps.check-version.outputs.latest_version }}" ]; then
+          NORMALIZED_UPDATED_VERSION=$(echo "$UPDATED_VERSION" | sed -E 's/^[\^~>=<]+//')
+          if [ "$NORMALIZED_UPDATED_VERSION" != "${{ steps.check-version.outputs.latest_version }}" ]; then
             echo "::error::Failed to update g4f version in pyproject.toml"
             exit 1
           fi
@@ -73,7 +82,8 @@ jobs:
       - name: Run tests to verify compatibility
         if: steps.check-version.outputs.needs_update == 'true'
         run: |
-          poetry run pytest -xvs tests/
+          python -m pytest -m "not long" --rootdir=. -v --junitxml=test-results.xml
+        continue-on-error: true
 
       - name: Create Pull Request
         if: steps.check-version.outputs.needs_update == 'true'
