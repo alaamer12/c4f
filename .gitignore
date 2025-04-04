@@ -102,3 +102,7 @@ wheels/
 /har_and_cookies/blackbox.json
 /poetry.lock
 /har_and_cookies/
+.mypy_cache/
+.ruff_cache/
+.benchmarks/
+.idea/*
