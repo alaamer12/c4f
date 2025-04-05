@@ -2,7 +2,10 @@
 
 A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes.
 
-```
+![Intro Animation](assets/intro.gif)
+
+<div align="center">
+  <pre style="background-color:#282c34; color:#61afef; font-weight:bold; padding:20px; border-radius:10px; font-size:16px">
    _____ _  _     _____ 
   / ____| || |   |  ___|
  | |    | || |_  | |_   
@@ -11,7 +14,8 @@ A sophisticated Git commit message generator that uses AI to create meaningful, 
   \_____|  |_|   |_|    
                         
  Commit For Free - AI-Powered Git Commit Message Generator
-```
+  </pre>
+</div>
 
 ## Features
 
@@ -24,7 +28,17 @@ A sophisticated Git commit message generator that uses AI to create meaningful, 
 - 🎯 Automatic change type detection (feat, fix, docs, etc.)
 - 📊 Progress tracking and status display
 
+## Demo
+
+See C4F in action:
+
+![Commit generation demo](assets/commits.gif)
+
+> **Note:** It's normal to occasionally see model response timeouts as shown in the demo. This is due to limitations of the free GPT models provided by `g4f`. After all configured attempts, the package automatically creates a fallback commit message to ensure you can always complete your workflow.
+
 ## Installation
+
+> **⚠️ Important:** C4F requires **Python 3.11 or higher** to run.
 
 ### Using pip
 
@@ -78,6 +92,8 @@ The tool will:
 2. Analyze the changes and their context
 3. Generate an appropriate commit message using AI
 4. Stage and commit the changes with the generated message
+
+![Full workflow demonstration](assets/full.gif)
 
 ### Command-line Options
 
@@ -156,11 +172,17 @@ Key configuration options available through command-line arguments:
 
 ## Requirements
 
-- Python 3.11+
-- Git
-- Required Python packages:
-  - g4f
-  - rich
+- **Python 3.11+** - C4F uses modern Python features that require version 3.11 or higher
+- **Git** - Required for accessing repository information and making commits
+- **Required Python packages:**
+  - `g4f` - Provides free access to AI models for generating commit messages
+  - `rich` - Powers the beautiful terminal interface and formatted output
+
+### System Requirements
+
+- Any modern operating system (Windows, macOS, Linux)
+- Approximately 100MB of disk space (including dependencies)
+- Stable internet connection for AI model access
 
 ## Contributing
 
