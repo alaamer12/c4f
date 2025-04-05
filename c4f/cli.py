@@ -15,25 +15,21 @@ Arguments:
 """
 
 import argparse
+import contextlib
+import locale
 import os
+import subprocess
+import sys
+import warnings
 from pathlib import Path
+
+from rich.panel import Panel
+from rich.text import Text
 
 # Import main functionality here to avoid circular imports
 from c4f.main import main as run_main
 
 __all__ = ["run_main"]
-
-# ASCII art banner for c4f
-BANNER = r"""
-   _____ _  _     _____ 
-  / ____| || |   |  ___|
- | |    | || |_  | |_   
- | |    |__   _| |  _|  
- | |____   | |   | |    
-  \_____|  |_|   |_|    
-                        
- Commit For Free - AI-Powered Git Commit Message Generator
-"""
 
 
 # Define color codes for terminal output
@@ -46,6 +42,200 @@ class Colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+
+def _create_patched_popen_init(original_init):
+    """
+    Create a patched version of subprocess.Popen.__init__ that ensures UTF-8 encoding.
+
+    Args:
+        original_init: The original subprocess.Popen.__init__ function.
+
+    Returns:
+        A patched initialization function for subprocess.Popen.
+    """
+
+    def patched_init(self, *args, **kwargs):
+        kwargs = _ensure_utf8_encoding(kwargs)
+        kwargs = _ensure_utf8_environment(kwargs)
+        original_init(self, *args, **kwargs)
+
+    return patched_init
+
+
+def _ensure_utf8_encoding(kwargs):
+    """
+    Ensure UTF-8 encoding with error handling is set in kwargs when needed.
+
+    Args:
+        kwargs: The keyword arguments dictionary for subprocess.Popen.
+
+    Returns:
+        Updated kwargs dictionary with proper encoding settings.
+    """
+    if 'encoding' not in kwargs and (kwargs.get('text', False) or kwargs.get('universal_newlines', False)):
+        kwargs['encoding'] = 'utf-8'
+        kwargs['errors'] = 'replace'
+    return kwargs
+
+
+def _ensure_utf8_environment(kwargs):
+    """
+    Ensure the environment variables include UTF-8 encoding settings.
+
+    Args:
+        kwargs: The keyword arguments dictionary for subprocess.Popen.
+
+    Returns:
+        Updated kwargs dictionary with proper environment settings.
+    """
+    if 'env' not in kwargs or kwargs['env'] is not None:
+        env = os.environ.copy() if 'env' not in kwargs else kwargs['env'].copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+        kwargs['env'] = env
+    return kwargs
+
+
+# Fix for subprocess encoding issues on Windows
+def patch_subprocess_for_windows():
+    """
+    Monkey patch subprocess.Popen to ensure all subprocess calls use UTF-8 encoding.
+    This fixes common UnicodeDecodeError issues on Windows terminals.
+    """
+    original_init = subprocess.Popen.__init__
+    subprocess.Popen.__init__ = _create_patched_popen_init(original_init)
+
+
+def fix_windows_encoding():
+    """Fix encoding issues on Windows platforms to ensure proper UTF-8 handling."""
+    if sys.platform == "win32":
+        _configure_stdout_stderr_encoding()
+        _set_environment_encoding()
+        patch_subprocess_for_windows()
+        _configure_locale_encoding()
+
+
+def _configure_stdout_stderr_encoding():
+    """Configure stdout and stderr to use UTF-8 encoding with appropriate error handling."""
+    with contextlib.suppress(Exception):
+        if hasattr(sys.stdout, 'reconfigure'):
+            _reconfigure_streams_python37_plus()
+        else:
+            _reconfigure_streams_python_legacy()
+
+
+def _reconfigure_streams_python37_plus():
+    """Reconfigure stdout and stderr using Python 3.7+ reconfigure method."""
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='backslashreplace')  # type: ignore
+
+
+def _reconfigure_streams_python_legacy():
+    """Reconfigure stdout and stderr for Python versions before 3.7."""
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'backslashreplace')
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'backslashreplace')
+
+
+def _set_environment_encoding():
+    """Set environment variables to prefer UTF-8 encoding."""
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+
+
+def _configure_locale_encoding():
+    """Configure locale settings to support UTF-8 where possible."""
+    try:
+        locale.setlocale(locale.LC_ALL, '.UTF-8')
+    except locale.Error:
+        try:
+            locale.setlocale(locale.LC_ALL, '')
+        except locale.Error:
+            pass
+
+
+fix_windows_encoding()
+
+# ASCII art banner for c4f
+BANNER_ASCII = r"""
+   _____ _  _     _____ 
+  / ____| || |   |  ___|
+ | |    | || |_  | |_   
+ | |    |__   _| |  _|  
+ | |____   | |   | |    
+  \_____|  |_|   |_|    
+                        
+ Commit For Free - AI-Powered Git Commit Message Generator
+"""
+
+
+# Create formatted banner with Rich
+def create_banner_text():
+    """Create the initial banner text with base styling."""
+    banner_text = Text(BANNER_ASCII)
+    banner_text.stylize("bold blue")
+    return banner_text
+
+
+def style_banner_lines(banner_text):
+    """Style individual banner lines with different styles for title."""
+    title_line = " Commit For Free - AI-Powered Git Commit Message Generator"
+    banner_lines = banner_text.plain.split('\n')
+    styled_banner = Text()
+
+    for i, line in enumerate(banner_lines):
+        if title_line.strip() in line:
+            styled_banner.append(line.replace(title_line, ""), style="bold blue")
+            styled_banner.append(title_line, style="bold green")
+        else:
+            styled_banner.append(line, style="bold blue")
+        if i < len(banner_lines) - 1:
+            styled_banner.append("\n")
+
+    return styled_banner
+
+
+def determine_box_style():
+    """Determine the appropriate box style based on platform."""
+    # Use simple ASCII characters for the panel border on Windows
+    # to avoid encoding issues
+    return "ascii" if sys.platform == "win32" else "rounded"
+
+
+def create_banner_panel(styled_banner, box_style):
+    """Create a panel containing the styled banner."""
+    return Panel(
+        styled_banner,
+        border_style="cyan",
+        padding=(0, 1),
+        title="C4F",
+        title_align="left",
+        box=box_style,
+    )
+
+
+def get_rich_banner():
+    """Create and return a rich formatted banner for the application."""
+    # Create banner_text and style it
+    banner_text = create_banner_text()
+    styled_banner = style_banner_lines(banner_text)
+    box_style = determine_box_style()
+
+    # Create the panel directly without any template substitution
+    panel = Panel(
+        styled_banner,
+        border_style="cyan",
+        padding=(0, 1),
+        title="C4F",
+        title_align="left",
+        box=box_style,
+    )
+
+    return panel
+
+
+# For backward compatibility
+BANNER = BANNER_ASCII
 
 
 # noinspection PyProtectedMember
@@ -98,6 +288,54 @@ class ColoredHelpFormatter(argparse.RawDescriptionHelpFormatter):
         return text
 
 
+def get_banner_description(color: bool = True) -> str:
+    """Get the banner description for the CLI.
+
+    Args:
+        color (bool): Whether to use colored output.
+
+    Returns:
+        str: The banner description.
+    """
+    if not color:
+        return f"{BANNER_ASCII}\nIntelligent Git Commit Message Generator"
+
+    try:
+        # Simply use color codes for terminal directly instead of Rich's capture mechanism
+        # which can be problematic on some systems
+        colored_ascii = "\n".join([
+            f"{Colors.BOLD}{Colors.BLUE}{line}{Colors.ENDC}"
+            for line in BANNER_ASCII.splitlines()
+        ])
+
+        # Add a colorful title
+        colored_ascii = colored_ascii.replace(
+            f"{Colors.BOLD}{Colors.BLUE} Commit For Free - AI-Powered Git Commit Message Generator{Colors.ENDC}",
+            f"{Colors.BOLD}{Colors.GREEN} Commit For Free - AI-Powered Git Commit Message Generator{Colors.ENDC}"
+        )
+
+        return f"{colored_ascii}\n"
+    except Exception as e:
+        # Fallback to plain banner if coloring fails
+        warnings.warn(f"Failed to create colored banner: {e}", UserWarning)
+        return f"{BANNER_ASCII}\nIntelligent Git Commit Message Generator"
+
+
+def get_epilog_text(color: bool = True) -> str:
+    """Get the epilog text for the CLI.
+
+    Args:
+        color (bool): Whether to use colored output.
+
+    Returns:
+        str: The epilog text.
+    """
+    repo_url = "https://github.com/alaamer12/c4f"
+    if color:
+        return f"{Colors.GREEN}For more information, visit: {repo_url}{Colors.ENDC}"
+    return f"For more information, visit: {repo_url}"
+
+
 def create_argument_parser(color: bool = True) -> argparse.ArgumentParser:
     """Create and configure the argument parser for the CLI.
 
@@ -107,13 +345,13 @@ def create_argument_parser(color: bool = True) -> argparse.ArgumentParser:
     Returns:
         argparse.ArgumentParser: Configured argument parser with program metadata.
     """
-    # Prepare the description text with ASCII banner if color is enabled
-    description = f"{Colors.BLUE}{BANNER}{Colors.ENDC}\nIntelligent Git Commit Message Generator" if color else "Intelligent Git Commit Message Generator"
+    description = get_banner_description(color)
+    epilog = get_epilog_text(color)
 
     parser = argparse.ArgumentParser(
         description=description,
         formatter_class=lambda prog: ColoredHelpFormatter(prog, color=color),
-        epilog=f"{Colors.GREEN}For more information, visit: https://github.com/alaamer12/c4f{Colors.ENDC}" if color else "For more information, visit: https://github.com/alaamer12/c4f",
+        epilog=epilog,
         prog="c4f",
         add_help=True,
         allow_abbrev=True
@@ -127,10 +365,11 @@ def add_version_argument(parser: argparse.ArgumentParser) -> None:
     Args:
         parser (argparse.ArgumentParser): The argument parser to add the version argument to.
     """
+    from c4f import __version__
     parser.add_argument(
         "-v", "--version",
         action="version",
-        version="%(prog)s 1.0.0",
+        version="%(prog)s " + __version__,
         help="Show program's version number and exit"
     )
 
@@ -214,6 +453,19 @@ def add_formatting_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_all_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add all arguments to the parser.
+
+    Args:
+        parser (argparse.ArgumentParser): The argument parser to add the arguments to.
+    """
+    add_version_argument(parser)
+    add_directory_argument(parser)
+    add_model_argument(parser)
+    add_generation_arguments(parser)
+    add_formatting_arguments(parser)
+
+
 def parse_args() -> argparse.Namespace:
     """Create parser, add arguments, and parse command line arguments.
 
@@ -230,11 +482,7 @@ def parse_args() -> argparse.Namespace:
     parser = create_argument_parser(color=True)
 
     # Add all arguments
-    add_version_argument(parser)
-    add_directory_argument(parser)
-    add_model_argument(parser)
-    add_generation_arguments(parser)
-    add_formatting_arguments(parser)
+    add_all_arguments(parser)
 
     args = parser.parse_args()
 
@@ -248,10 +496,37 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def main() -> None:
-    """Main entry point for the CLI."""
-    args = parse_args()
-    # Update global constants based on CLI arguments
+# noinspection PyBroadException
+def display_banner() -> None:
+    """Display the application banner with error handling."""
+    try:
+        # Use direct ANSI color codes for a more compatible approach
+        colored_ascii = "\n".join([
+            f"{Colors.BOLD}{Colors.BLUE}{line}{Colors.ENDC}"
+            for line in BANNER_ASCII.splitlines()
+        ])
+
+        # Add a colorful title
+        colored_ascii = colored_ascii.replace(
+            f"{Colors.BOLD}{Colors.BLUE} Commit For Free - AI-Powered Git Commit Message Generator{Colors.ENDC}",
+            f"{Colors.BOLD}{Colors.GREEN} Commit For Free - AI-Powered Git Commit Message Generator{Colors.ENDC}"
+        )
+
+        print(colored_ascii)
+    except UnicodeEncodeError:
+        # Fallback to plain banner if rich formatting fails
+        print(BANNER_ASCII)
+    except Exception:
+        # Silently continue if any display errors occur - the banner is nice to have but not critical
+        print(f"   C4F - Commit For Free")
+
+
+def update_global_settings(args: argparse.Namespace) -> None:
+    """Update global constants based on CLI arguments.
+    
+    Args:
+        args: Parsed command line arguments.
+    """
     globals().update({
         'FORCE_BRACKETS': args.force_brackets,
         'FALLBACK_TIMEOUT': args.timeout,
@@ -259,7 +534,25 @@ def main() -> None:
         'MODEL': args.model,
     })
 
-    # Run the main program with the root argument
+
+def main() -> None:
+    """Main entry point for the CLI."""
+    # Check if we're displaying help or version info
+    help_flags = ('-h', '--help', '-v', '--version')
+    showing_help = any(flag in sys.argv for flag in help_flags)
+
+    # Only display the banner directly if not showing help/version
+    # (since help/version output already includes the banner)
+    if not showing_help:
+        display_banner()
+
+    # Parse command line arguments
+    args = parse_args()
+
+    # Update global settings based on arguments
+    update_global_settings(args)
+
+    # Run the main program
     run_main()
 
 

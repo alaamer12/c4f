@@ -80,15 +80,82 @@ class FileChange:
         self.last_modified = os.path.getmtime(self.path) if os.path.exists(self.path) else 0.0
 
 
+def create_subprocess_env() -> Dict[str, str]:
+    """Create environment with explicit encoding settings for subprocess.
+    
+    Returns:
+        Dict[str, str]: Environment variables dictionary with encoding settings.
+    """
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
+    return env
+
+
+def run_subprocess_text_mode(command: List[str], encoding: str, errors: str) -> Tuple[str, str, int]:
+    """Run subprocess in text mode with specified encoding.
+    
+    Args:
+        command: Command to execute as a list of strings.
+        encoding: Character encoding to use.
+        errors: How to handle encoding/decoding errors.
+        
+    Returns:
+        Tuple[str, str, int]: stdout, stderr, and return code.
+    """
+    env = create_subprocess_env()
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding=encoding,
+        errors=errors,
+        env=env,
+        universal_newlines=True
+    )
+    stdout, stderr = process.communicate()
+    return stdout, stderr, process.returncode
+
+
+def run_subprocess_binary_mode(command: List[str], encoding: str, errors: str) -> Tuple[str, str, int]:
+    """Run subprocess in binary mode with manual decoding.
+    
+    Args:
+        command: Command to execute as a list of strings.
+        encoding: Character encoding to use for decoding.
+        errors: How to handle encoding/decoding errors.
+        
+    Returns:
+        Tuple[str, str, int]: decoded stdout, stderr, and return code.
+    """
+    env = create_subprocess_env()
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env
+    )
+    stdout_bytes, stderr_bytes = process.communicate()
+    stdout = stdout_bytes.decode(encoding, errors=errors)
+    stderr = stderr_bytes.decode(encoding, errors=errors)
+    return stdout, stderr, process.returncode
+
+
 def run_git_command(command: List[str]) -> Tuple[str, str, int]:
     """Execute a git command and return its output.
     
     The command is executed as a subprocess and the function waits for it to complete.
     Returns stdout, stderr, and the return code as a tuple.
     """
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    stdout, stderr = process.communicate()
-    return stdout, stderr, process.returncode
+    # Set default encoding to UTF-8 with error handling for Windows compatibility
+    encoding = 'utf-8'
+    errors = 'replace'  # Replace invalid chars with a replacement marker
+
+    try:
+        return run_subprocess_text_mode(command, encoding, errors)
+    except UnicodeDecodeError:
+        # Fall back to binary mode and manual decoding if text mode fails
+        return run_subprocess_binary_mode(command, encoding, errors)
 
 
 def get_root_git_workspace() -> Path:
@@ -99,35 +166,104 @@ def get_root_git_workspace() -> Path:
     return Path(__file__).parent
 
 
+def get_git_status_output() -> Tuple[str, str, int]:
+    """Get the raw output from git status command.
+    
+    Returns:
+        Tuple[str, str, int]: stdout, stderr, and return code from git status command.
+    """
+    return run_git_command(["git", "status", "--porcelain"])
+
+
+def handle_git_status_error(stderr: str) -> None:
+    """Handle error from git status command.
+    
+    Args:
+        stderr: Error output from git status command.
+    
+    Exits the program if the git status command fails.
+    """
+    console.print(f"[red]Error getting git status:[/red] {stderr}", style="bold red")
+    sys.exit(1)
+
+
+def process_untracked_file(status: str, file_path: str) -> List[Tuple[str, str]]:
+    """Process untracked files and directories.
+    
+    Args:
+        status: Git status code.
+        file_path: Path to the file or directory.
+        
+    Returns:
+        List of tuples containing status and file path.
+    """
+    changes = []
+    status = "A"  # Treat untracked as new/added files
+    path = Path(file_path)
+    if path.is_dir():
+        # For untracked directories, add all files recursively
+        for file in list_untracked_files(path):
+            changes.append((status, str(file)))
+    else:
+        changes.append((status, file_path))
+    return changes
+
+
+def process_renamed_file(file_path: str) -> str:
+    """Process renamed files to extract the new file path.
+    
+    Args:
+        file_path: Original file path string containing the rename information.
+        
+    Returns:
+        The new file path after rename.
+    """
+    return file_path.split(" -> ")[1]
+
+
+def process_git_status_line(line: str) -> List[Tuple[str, str]]:
+    """Process a single line from git status output.
+    
+    Args:
+        line: A line from git status --porcelain output.
+        
+    Returns:
+        List of tuples containing status and file path.
+    """
+    if not line.strip():
+        return []
+
+    status, file_path = line[:2].strip(), line[2:].strip()
+
+    # Handle untracked files (marked as '??')
+    if status == "??":
+        return process_untracked_file(status, file_path)
+    # Handle renamed files
+    elif status == "R":
+        file_path = process_renamed_file(file_path)
+        return [(status, file_path)]
+    # Handle regular changes
+    else:
+        return [(status, file_path)]
+
+
 def parse_git_status() -> List[Tuple[str, str]]:
     """Parse the output of 'git status --porcelain' to get file changes.
     
     Retrieves and processes git status output to identify changed files.
     Exits the program if the git status command fails.
     Handles special cases like untracked and renamed files.
+    
+    Returns:
+        List of tuples containing status and file path.
     """
-    stdout, stderr, code = run_git_command(["git", "status", "--porcelain"])
+    stdout, stderr, code = get_git_status_output()
     if code != 0:
-        console.print(f"[red]Error getting git status:[/red] {stderr}", style="bold red")
-        sys.exit(1)
+        handle_git_status_error(stderr)
 
     changes = []
     for line in stdout.splitlines():
-        if not line.strip():
-            continue
-        status, file_path = line[:2].strip(), line[2:].strip()
-        # Handle untracked files (marked as '??')
-        if status == "??":
-            status = "A"  # Treat untracked as new/added files
-            path = Path(file_path)
-            if path.is_dir():
-                # For untracked directories, add all files recursively
-                for file in list_untracked_files(path):
-                    changes.append((status, str(file)))
-                continue  # Skip adding the directory itself
-        elif status == "R":
-            file_path = file_path.split(" -> ")[1]
-        changes.append((status, file_path))
+        changes.extend(process_git_status_line(line))
     return changes
 
 
