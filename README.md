@@ -2,7 +2,7 @@
 
 A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes.
 
-![Intro Animation](assets/intro.gif)
+![Intro Animation](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/intro.gif)
 
 <div align="center">
   <pre style="background-color:#282c34; color:#61afef; font-weight:bold; padding:20px; border-radius:10px; font-size:16px">
@@ -32,7 +32,7 @@ A sophisticated Git commit message generator that uses AI to create meaningful, 
 
 See C4F in action:
 
-![Commit generation demo](assets/commits.gif)
+![Commit generation demo](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/commits.gif)
 
 > **Note:** It's normal to occasionally see model response timeouts as shown in the demo. This is due to limitations of the free GPT models provided by `g4f`. After all configured attempts, the package automatically creates a fallback commit message to ensure you can always complete your workflow.
 
@@ -93,7 +93,7 @@ The tool will:
 3. Generate an appropriate commit message using AI
 4. Stage and commit the changes with the generated message
 
-![Full workflow demonstration](assets/full.gif)
+![Full workflow demonstration](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/full.gif)
 
 ### Command-line Options
 
