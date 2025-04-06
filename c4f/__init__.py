@@ -39,7 +39,7 @@ Project Information:
     Keywords: git, commit, ai, conventional-commits, automation
 """
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 __author__ = "Alaamer"
 __email__ = "ahmedmuhamed12@gmail.com"
 __license__ = "MIT"

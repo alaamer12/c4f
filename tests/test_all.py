@@ -22,7 +22,12 @@ def test_run_git_command(mock_popen):
     assert stdout == "mock output"
     assert stderr == "mock error"
     assert code == 0
-    mock_popen.assert_called_once_with(["git", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    mock_popen.assert_called_once()
+    args, kwargs = mock_popen.call_args
+    assert args[0] == ["git", "status"]
+    assert kwargs['stdout'] == subprocess.PIPE
+    assert kwargs['stderr'] == subprocess.PIPE
+    assert kwargs['text'] == True
 
 
 @pytest.fixture
