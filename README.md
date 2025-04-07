@@ -1,10 +1,13 @@
 # C4F - Commit For Free
+[![PyPI version](https://img.shields.io/pypi/v/commit-for-free.svg)](https://pypi.org/project/commit-for-free/)
+[![Python Version](https://img.shields.io/pypi/pyversions/commit-for-free.svg)](https://pypi.org/project/commit-for-free/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes.
 
 ![Intro Animation](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/intro.gif)
 
-<div align="center">
+<div>
   <pre style="background-color:#282c34; color:#61afef; font-weight:bold; padding:20px; border-radius:10px; font-size:16px">
    _____ _  _     _____ 
   / ____| || |   |  ___|
@@ -219,6 +222,11 @@ While c4f has been primarily tested with `gpt-4-mini`, `gpt-4`, and `gpt-3.5-tur
 - Lower quality commit messages
 - Slower performance
 - Unexpected errors or timeouts
+
+Always use the latest version of g4f to ensure compatibility and access to the most recent models and improvements. You can update g4f with:
+```bash
+pip install -U g4f
+```
 
 For the best experience, we recommend using one of the officially supported models specified in the command-line options.
 
