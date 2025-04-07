@@ -1,10 +1,11 @@
 # mypy: ignore-errors
-
+import subprocess
 from unittest.mock import patch, MagicMock, ANY
 import pytest
 
 import c4f
 from c4f.main import *
+from c4f.utils import FileChange
 
 
 @pytest.fixture
