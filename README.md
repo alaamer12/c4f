@@ -5,7 +5,7 @@
 
 A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes.
 
-![Intro Animation](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/intro.gif)
+![Simple GIF showcase an introduction about C4f](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/intro.gif "Intro Animation")
 
 <div>
   <pre style="background-color:#282c34; color:#61afef; font-weight:bold; padding:20px; border-radius:10px; font-size:16px">
@@ -62,6 +62,14 @@ python -m pipx ensurepath
 pipx install commit-for-free
 ```
 
+### With Enhanced Resource Monitoring
+
+For more accurate system resource monitoring (CPU, memory, process tree):
+
+```bash
+pip install commit-for-free[monitoring]
+```
+
 ### From source
 
 1. Clone the repository:
@@ -96,7 +104,7 @@ The tool will:
 3. Generate an appropriate commit message using AI
 4. Stage and commit the changes with the generated message
 
-![Full workflow demonstration](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/full.gif)
+![A Long GIF file showcasing how the author commited changes using c4f with inudstrial practices](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/full.gif "Full workflow demonstration")
 
 ### Command-line Options
 
