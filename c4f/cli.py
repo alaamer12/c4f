@@ -550,6 +550,7 @@ def create_config_from_args(args: argparse.Namespace) -> Config:
 
 def main() -> None:
     """Main entry point for the CLI."""
+    from c4f.utils import console
     # Check if we're displaying help or version info
     help_flags = ('-h', '--help', '-v', '--version')
     showing_help = any(flag in sys.argv for flag in help_flags)
@@ -566,7 +567,11 @@ def main() -> None:
     config = create_config_from_args(args)
 
     # Run the main program with the configuration
-    run_main(config)
+    try:
+        run_main(config)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Operation cancelled by user. Exiting...[/yellow]")
+        return
 
 
 if __name__ == "__main__":

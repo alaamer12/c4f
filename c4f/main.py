@@ -31,7 +31,7 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 
-from c4f.utils import console, client, SubprocessHandler, FileChange
+from c4f.utils import console, client, SubprocessHandler, FileChange, SecureSubprocess
 from c4f.config import Config
 
 __dir__ = ["main"]
@@ -47,7 +47,11 @@ def run_git_command(command: List[str], timeout: Optional[int] = None) -> Tuple[
     Returns:
         Tuple[str, str, int]: stdout, stderr, and return code.
     """
-    handler = SubprocessHandler()
+    handler = SecureSubprocess(
+            timeout=timeout,
+            allowed_commands={"git"},  # Allow git command
+            restricted_env=False  # Use full environment for git commands
+        )
     return handler.run_command(command, timeout)
 
 
