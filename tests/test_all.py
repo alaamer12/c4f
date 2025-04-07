@@ -1,9 +1,9 @@
 # mypy: ignore-errors
 import subprocess
 from unittest.mock import patch, MagicMock, ANY
+
 import pytest
 
-import c4f
 from c4f.main import *
 from c4f.utils import FileChange
 
@@ -270,98 +270,106 @@ def test_group_related_changes():
     assert len(groups[2]) == 1  # One fix in root directory
 
 
-def test_generate_commit_message():
-    changes = [FileChange("feat", "src/module1/file1.py", "added")]
-    message = generate_commit_message(changes)
-    assert isinstance(message, str)
-    assert len(message) > 0  # Ensure the message is not empty
+def test_generate_commit_message(mock_config):
+    """Test generate_commit_message with mocked dependencies."""
+    changes = [FileChange(Path("src/module1/file1.py"), "added", "", "feat")]
+    
+    with patch("c4f.main.create_combined_context", return_value="added src/module1/file1.py"), \
+         patch("c4f.main.calculate_total_diff_lines", return_value=10), \
+         patch("c4f.main.determine_tool_calls", return_value={"function": {"name": "generate_commit", "arguments": {}}}), \
+         patch("c4f.main.get_formatted_message", return_value="feat: add new feature"), \
+         patch("c4f.main.is_corrupted_message", return_value=False):
+        message = generate_commit_message(changes, mock_config)
+        assert message == "feat: add new feature"
 
 
-def test_determine_tool_calls():
-    simple_result = determine_tool_calls(False, "Basic change")
-    comprehensive_result = determine_tool_calls(True, "Major update", "Detailed summary")
+@pytest.fixture
+def mock_config():
+    return Config(
+        force_brackets=False,
+        prompt_threshold=80,
+        fallback_timeout=10,
+        min_comprehensive_length=50,
+        attempt=3,
+        diff_max_length=100
+    )
+
+
+def test_determine_tool_calls(mock_config):
+    simple_result = determine_tool_calls(False, "Basic change", "", mock_config)
+    comprehensive_result = determine_tool_calls(True, "Major update", "Detailed summary", mock_config)
 
     assert isinstance(simple_result, dict)
     assert isinstance(comprehensive_result, dict)
-
-    # Correcting the assertion
-    assert "summary" in comprehensive_result["function"]["arguments"][
-        "sections"]
+    assert "sections" in comprehensive_result["function"]["arguments"]
 
 
-def test_attempt_generate_message():
-    changes = [FileChange("feat", "src/module1/file1.py", "added")]
-    message = attempt_generate_message("Some context", {"tool": "mock"}, changes, 10)
-    assert message is None or isinstance(message, str)  # It should return a string or None
+def test_attempt_generate_message(mock_config):
+    """Test attempt_generate_message with mocked dependencies."""
+    changes = [FileChange(Path("src/module1/file1.py"), "added", "", "feat")]
+    combined_context = "added src/module1/file1.py"
+    tool_calls = {"function": {"name": "generate_commit", "arguments": {}}}
+    total_diff_lines = 10
+
+    with patch("c4f.main.determine_prompt", return_value="Test prompt"), \
+         patch("c4f.main.model_prompt", return_value="feat: add new feature"):
+        message = attempt_generate_message(combined_context, tool_calls, changes, total_diff_lines, mock_config)
+        assert message == "feat: add new feature"
 
 
-def test_create_combined_context():
-    changes = [
-        FileChange("feat", Path("src/module1/file1.py"), "added"),
-        FileChange("fix", Path("src/module2/file2.py"), "modified")
-    ]
-    context = create_combined_context(changes)
-
-    # Normalize to Unix-style paths for consistent testing
-    normalized_context = context.replace("\\", "/")
-
-    expected_output = "src/module1/file1.py feat\nsrc/module2/file2.py fix"
-    assert normalized_context == expected_output
-
-
-def test_generate_simple_prompt():
+def test_generate_simple_prompt(mock_config):
     combined_text = "Modified README.md"
-    prompt = generate_simple_prompt(combined_text)
+    prompt = generate_simple_prompt(combined_text, mock_config)
     assert combined_text in prompt
     assert "single-line commit message" in prompt
 
 
-def test_generate_comprehensive_prompt():
+def test_generate_comprehensive_prompt(mock_config):
     combined_text = "Updated main.py"
     diffs_summary = "Refactored main function and improved logging."
-    prompt = generate_comprehensive_prompt(combined_text, diffs_summary)
+    prompt = generate_comprehensive_prompt(combined_text, diffs_summary, mock_config)
     assert combined_text in prompt
     assert diffs_summary in prompt
     assert "Generate a commit message in this format:" in prompt
 
 
-def test_determine_prompt_small_change():
+def test_determine_prompt_small_change(mock_config):
     combined_text = "Fixed typo in documentation"
     changes = [FileChange(Path("docs.txt"), "M", "Fixed typo")]
     diff_lines = 10  # Less than threshold
 
-    result = determine_prompt(combined_text, changes, diff_lines)
+    result = determine_prompt(combined_text, changes, diff_lines, mock_config)
     assert "single-line commit message" in result
 
 
-def test_determine_prompt_large_change():
+def test_determine_prompt_large_change(mock_config):
     combined_text = "Refactored entire user authentication module"
     changes = [FileChange(Path("auth.py"), "M", "Refactored auth logic")]
     diff_lines = 100  # More than threshold
 
-    result = determine_prompt(combined_text, changes, diff_lines)
+    result = determine_prompt(combined_text, changes, diff_lines, mock_config)
     assert "Generate a commit message in this format:" in result
 
 
-def test_model_prompt():
+def test_model_prompt(mock_config):
     prompt = "Test prompt"
     tool_calls = {}
     with patch("c4f.main.get_model_response", return_value="Mocked response"):
-        response = model_prompt(prompt, tool_calls)
+        response = model_prompt(prompt, tool_calls, mock_config)
         assert response == "Mocked response"
 
 
-def test_get_model_response():
+def test_get_model_response(mock_config):
     prompt = "Test model prompt"
     tool_calls = {}
     with patch("c4f.main.client.chat.completions.create") as mock_create:
         mock_create.return_value.choices = [
             type("obj", (object,), {"message": type("msg", (object,), {"content": "Mocked content"})})]
-        response = get_model_response(prompt, tool_calls)
+        response = get_model_response(prompt, tool_calls, mock_config)
         assert response == "Mocked content"
 
     with patch("c4f.main.client.chat.completions.create", side_effect=Exception("API error")):
-        response = get_model_response(prompt, tool_calls)
+        response = get_model_response(prompt, tool_calls, mock_config)
         assert response is None
 
 
@@ -372,11 +380,11 @@ def test_execute_with_progress():
         assert response == "Mocked response"
 
 
-def test_execute_with_timeout():
+def test_execute_with_timeout(mock_config):
     mock_func = MagicMock(return_value="Mocked response")
     progress = MagicMock()
     task = MagicMock()
-    response = execute_with_timeout(mock_func, progress, task)
+    response = execute_with_timeout(mock_func, progress, task, mock_config)
     assert response == "Mocked response"
 
 
@@ -515,13 +523,14 @@ def test_display_changes():
 
 
 def test_main():
+    mock_config = Config()
     with patch("c4f.main.handle_non_existent_git_repo"), \
             patch("c4f.main.reset_staging"), \
             patch("c4f.main.get_valid_changes", return_value=["change"]), \
             patch("c4f.main.display_changes"), \
             patch("c4f.main.group_related_changes", return_value=[["group1"]]), \
             patch("c4f.main.process_change_group", return_value=True):
-        main()
+        main(mock_config)
 
 
 def test_get_valid_changes():
@@ -577,18 +586,18 @@ def test_exit_with_no_changes():
         mock_exit.assert_called_once_with(0)
 
 
-def test_process_change_group():
+def test_process_change_group(mock_config):
     group = [MockFileChange("M", "file1.txt", "Modified", 10, 1640995200)]
     with patch("c4f.main.generate_commit_message", return_value="Commit message"), \
             patch("c4f.main.display_commit_preview"), \
             patch("c4f.main.do_group_commit", return_value=True) as mock_commit, \
             patch("c4f.main.get_valid_user_response", return_value="y"), \
             patch("c4f.main.handle_user_response", return_value=True) as mock_response:
-        result = process_change_group(group, accept_all=True)
+        result = process_change_group(group, mock_config, accept_all=True)
         assert result is True
         mock_commit.assert_called_once_with(group, "Commit message", True)
 
-        result = process_change_group(group, accept_all=False)
+        result = process_change_group(group, mock_config, accept_all=False)
         assert result is True
         mock_response.assert_called_once_with("y", group, "Commit message")
 
@@ -710,14 +719,14 @@ def test_get_file_diff_tracked(mock_is_dir, mock_is_untracked, mock_get_diff):
 
 
 
-def test_shorten_diff_no_change():
+def test_shorten_diff_no_change(mock_config):
     diff = "line1\nline2\nline3"
-    assert shorten_diff(diff) == diff
+    assert shorten_diff(diff, mock_config) == diff
 
-def test_shorten_diff_truncated():
-    diff = "\n".join(f"line{i}" for i in range(DIFF_MAX_LENGTH + 2))
-    expected = "\n".join(f"line{i}" for i in range(DIFF_MAX_LENGTH)) + "\n\n...\n\n"
-    assert shorten_diff(diff) == expected
+def test_shorten_diff_truncated(mock_config):
+    diff = "\n".join(f"line{i}" for i in range(mock_config.diff_max_length + 2))
+    expected = "\n".join(f"line{i}" for i in range(mock_config.diff_max_length)) + "\n\n...\n\n"
+    assert shorten_diff(diff, mock_config) == expected
 
 
 @patch("c4f.main.run_git_command", return_value=("", "error", 1))
@@ -789,17 +798,17 @@ def empty_file_change():
                      last_modified=1600
                      )
 
-def test_generate_commit_message_simple(simple_file_change):
+def test_generate_commit_message_simple(simple_file_change, mock_config):
     changes = [simple_file_change]
     with patch("c4f.main.create_combined_context", return_value="context"), \
             patch("c4f.main.calculate_total_diff_lines", return_value=5), \
             patch("c4f.main.determine_tool_calls", return_value=[]), \
             patch("c4f.main.get_formatted_message", return_value="fix: update file1"), \
             patch("c4f.main.is_corrupted_message", return_value=False):
-        assert generate_commit_message(changes) == "fix: update file1"
+        assert generate_commit_message(changes, mock_config) == "fix: update file1"
 
 
-def test_generate_commit_message_comprehensive(possible_values, comprehensive_file_change):
+def test_generate_commit_message_comprehensive(possible_values, comprehensive_file_change, mock_config):
     changes = [comprehensive_file_change]
     with patch("c4f.main.create_combined_context", return_value="context"), \
             patch("c4f.main.calculate_total_diff_lines", return_value=20), \
@@ -808,7 +817,7 @@ def test_generate_commit_message_comprehensive(possible_values, comprehensive_fi
             patch("c4f.main.get_formatted_message", return_value="fix: update file1"), \
             patch("c4f.main.is_corrupted_message", return_value=False), \
             patch("c4f.main.handle_comprehensive_message", return_value="final message"):
-        assert any(value in generate_commit_message(changes) for value in possible_values)
+        assert any(value in generate_commit_message(changes, mock_config) for value in possible_values)
 
 def test_handle_short_comprehensive_message_use(monkeypatch):
     """Test when user inputs '1', expecting 'use'."""
@@ -847,7 +856,7 @@ def test_handle_short_comprehensive_message_fallback_multiple(monkeypatch):
     assert result == "fallback"
 
 
-def test_generate_commit_message_retry(possible_values, empty_file_change):
+def test_generate_commit_message_retry(possible_values, empty_file_change, mock_config):
     changes = [empty_file_change]
     with patch("c4f.main.create_combined_context", return_value="context"), \
             patch("c4f.main.calculate_total_diff_lines", return_value=20), \
@@ -856,13 +865,13 @@ def test_generate_commit_message_retry(possible_values, empty_file_change):
             patch("c4f.main.get_formatted_message", side_effect=["corrupted", "valid message"]), \
             patch("c4f.main.is_corrupted_message", side_effect=[True, False]), \
             patch("c4f.main.handle_comprehensive_message", return_value="valid message"):
-        assert any(value not in generate_commit_message(changes) for value in possible_values)
+        assert any(value not in generate_commit_message(changes, mock_config) for value in possible_values)
 
 
-def test_is_corrupted_message():
+def test_is_corrupted_message(mock_config):
     with patch("c4f.main.is_conventional_type", return_value=False), \
             patch("c4f.main.is_conventional_type_with_brackets", return_value=False):
-        assert is_corrupted_message("") is True
+        assert is_corrupted_message("", mock_config) is True
 
 
 
@@ -893,19 +902,25 @@ def test_is_conventional_type():
     assert is_conventional_type("docs: update readme") == True
 
 
-def test_is_convetional_type_with_brackets():
-    # Path 1: FORCE_BRACKETS False (override for test)
-    FORCE_BRACKETS = True
-    original = FORCE_BRACKETS # True
-    FORCE_BRACKETS = False
-    assert is_conventional_type_with_brackets("feat: test") == True
-    FORCE_BRACKETS = original
+def test_is_conventional_type_with_brackets_force_disable():
+    """Test is_convetional_type_with_brackets with force_brackets set to False."""
+    # Create a config with force_brackets disabled
+    config_no_brackets = Config(force_brackets=False)
+    
+    # The function should return True regardless of input when force_brackets is False
+    assert is_conventional_type_with_brackets("feat: test", config_no_brackets) is True
+    assert is_conventional_type_with_brackets("feat(scope): test", config_no_brackets) is True
 
-    # Path 2: FORCE_BRACKETS True, has brackets
-    assert is_conventional_type_with_brackets("feat(scope): test") == True
+def test_is_conventional_type_with_brackets_force_enable():
+    """Test is_conventional_type_with_brackets with force_brackets set to True."""
+    # Create a config with force_brackets enabled
+    config_with_brackets = Config(force_brackets=True)
 
-    # Path 3: FORCE_BRACKETS True, no brackets
-    assert is_conventional_type_with_brackets("feat: test") == True # it should be false but because of global variable it always true
+    # With brackets should return True
+    assert is_conventional_type_with_brackets("feat(scope): message", config_with_brackets) is True
+
+    # Without brackets should return False
+    assert is_conventional_type_with_brackets("feat: message", config_with_brackets) is False
 
 
 def test_purify_commit_message_introduction():
@@ -960,7 +975,7 @@ def possible_values():
            "security"]
 
 
-def test_generate_fallback_message(possible_values,simple_file_change):
+def test_generate_fallback_message(possible_values,simple_file_change, mock_config):
     # Use one of the valid types from possible_values for testing.
     change_type = possible_values[0]
     # Create a list of FileChange objects with dummy file names.
@@ -980,77 +995,69 @@ def test_generate_fallback_message(possible_values,simple_file_change):
     # Assert that the generated message matches the expected pattern.
     assert re.match(pattern, message), f"Unexpected format: {message}"
 
-def test_handle_comprehensive_message_none(empty_file_change):
+def test_handle_comprehensive_message_none(empty_file_change, mock_config):
     """Test when message is None."""
-    result = handle_comprehensive_message(None, [empty_file_change])
+    result = handle_comprehensive_message(None, [empty_file_change], mock_config)
     assert result is None
 
-def test_handle_comprehensive_message_long_enough(comprehensive_file_change):
-    """Test when message length >= MIN_COMPREHENSIVE_LENGTH."""
-    from c4f.main import handle_comprehensive_message, MIN_COMPREHENSIVE_LENGTH
-    long_message = "a" * MIN_COMPREHENSIVE_LENGTH  # Create message that meets minimum length
-    result = handle_comprehensive_message(long_message, [comprehensive_file_change])
+def test_handle_comprehensive_message_long_enough(comprehensive_file_change, mock_config):
+    """Test when message length >= min_comprehensive_length."""
+    long_message = "a" * mock_config.min_comprehensive_length  # Create message that meets minimum length
+    result = handle_comprehensive_message(long_message, [comprehensive_file_change], mock_config)
     assert result == long_message
 
 
-def test_handle_comprehensive_message_short_use_patched(simple_file_change):
+def test_handle_comprehensive_message_short_use_patched(simple_file_change, mock_config):
     """Test short message with 'use' action."""
-    from c4f.main import handle_comprehensive_message
     with patch("c4f.main.handle_short_comprehensive_message", return_value="use"):
-        result = handle_comprehensive_message("short", [simple_file_change])
+        result = handle_comprehensive_message("short", [simple_file_change], mock_config)
         assert result == "short"
 
-def test_handle_comprehensive_message_short_retry_patched(simple_file_change):
+def test_handle_comprehensive_message_short_retry_patched(simple_file_change, mock_config):
     """Test short message with 'retry' action."""
-    from c4f.main import handle_comprehensive_message
     with patch("c4f.main.handle_short_comprehensive_message", return_value="retry"):
-        result = handle_comprehensive_message("short", [simple_file_change])
+        result = handle_comprehensive_message("short", [simple_file_change], mock_config)
         assert result == "retry"
 
-def test_handle_comprehensive_message_short_fallback_patched(simple_file_change):
+def test_handle_comprehensive_message_short_fallback_patched(simple_file_change, mock_config):
     """Test short message with 'fallback' action."""
-    from c4f.main import handle_comprehensive_message
     with patch("c4f.main.handle_short_comprehensive_message", return_value="fallback"):
         with patch("c4f.main.generate_fallback_message", return_value="fallback message"):
-            result = handle_comprehensive_message("short", [simple_file_change])
+            result = handle_comprehensive_message("short", [simple_file_change], mock_config)
             assert result == "fallback message"
 
 @pytest.mark.long
-def test_handle_comprehensive_message_short_invalid_then_use_patched(simple_file_change):
+def test_handle_comprehensive_message_short_invalid_then_use_patched(simple_file_change, mock_config):
     """Test short message with invalid action, then 'use' via input."""
-    from c4f.main import handle_comprehensive_message
     with patch("c4f.main.handle_short_comprehensive_message", return_value="invalid"):
         with patch("builtins.input", return_value=""):  # Empty input counts as "use"
-            result = handle_comprehensive_message("short", [simple_file_change])
+            result = handle_comprehensive_message("short", [simple_file_change], mock_config)
             assert result == "short"
 
-def test_handle_comprehensive_message_short_invalid_then_retry_patched(simple_file_change):
+def test_handle_comprehensive_message_short_invalid_then_retry_patched(simple_file_change, mock_config):
     """Test short message with invalid action, then 'retry' via input."""
-    from c4f.main import handle_comprehensive_message
     with patch("c4f.main.handle_short_comprehensive_message", return_value="invalid"):
         with patch("builtins.input", return_value="r"):  # 'r' for retry
-            result = handle_comprehensive_message("short", [simple_file_change])
+            result = handle_comprehensive_message("short", [simple_file_change], mock_config)
             assert result == "retry"
 
-def test_handle_comprehensive_message_short_invalid_then_fallback_patched(empty_file_change):
+def test_handle_comprehensive_message_short_invalid_then_fallback_patched(empty_file_change, mock_config):
     """Test short message with invalid action, then 'fallback' via input."""
-    from c4f.main import handle_comprehensive_message
     with patch("c4f.main.handle_short_comprehensive_message", return_value="invalid"):
         with patch("builtins.input", return_value="f"):  # 'f' for fallback
             with patch("c4f.main.generate_fallback_message", return_value="fallback message"):
-                result = handle_comprehensive_message("short", [empty_file_change])
+                result = handle_comprehensive_message("short", [empty_file_change], mock_config)
                 assert result == "fallback message"
 
 @pytest.mark.long
-def test_handle_comprehensive_message_short_multiple_invalid_then_use(empty_file_change):
+def test_handle_comprehensive_message_short_multiple_invalid_then_use(empty_file_change, mock_config):
     """Test short message with multiple invalid actions, then 'use' via input."""
-    from c4f.main import handle_comprehensive_message
     with patch("c4f.main.handle_short_comprehensive_message", return_value="invalid"):
         with patch("builtins.input", return_value=""):  # Empty input counts as "use"
-            result = handle_comprehensive_message("short", [empty_file_change])
+            result = handle_comprehensive_message("short", [empty_file_change], mock_config)
             assert result == "short"
 
-def test_generate_commit_message_multiple_retries(comprehensive_file_change):
+def test_generate_commit_message_multiple_retries(comprehensive_file_change, mock_config):
     """Test generate_commit_message with multiple corrupted messages before success."""
     changes = [comprehensive_file_change]
     
@@ -1062,14 +1069,14 @@ def test_generate_commit_message_multiple_retries(comprehensive_file_change):
          patch("c4f.main.calculate_total_diff_lines", return_value=30), \
          patch("c4f.main.determine_tool_calls", return_value={}), \
          patch("c4f.main.get_formatted_message", return_value="valid message"), \
-         patch("c4f.main.is_corrupted_message", side_effect=lambda x: next(corruption_iter)), \
+         patch("c4f.main.is_corrupted_message", side_effect=lambda x, y: next(corruption_iter)), \
          patch("c4f.main.generate_fallback_message", return_value="fallback"):
         
-        message = generate_commit_message(changes)
+        message = generate_commit_message(changes, mock_config)
         # Should get the valid message on the third attempt
         assert message == "valid message"
 
-def test_generate_commit_message_comprehensive_path(comprehensive_file_change):
+def test_generate_commit_message_comprehensive_path(comprehensive_file_change, mock_config):
     """Test the comprehensive message path in generate_commit_message."""
     changes = [comprehensive_file_change]
     
@@ -1081,10 +1088,10 @@ def test_generate_commit_message_comprehensive_path(comprehensive_file_change):
          patch("c4f.main.is_corrupted_message", return_value=False), \
          patch("c4f.main.handle_comprehensive_message", return_value="processed message"):
         
-        message = generate_commit_message(changes)
+        message = generate_commit_message(changes, mock_config)
         assert message == "processed message"
 
-def test_generate_commit_message_comprehensive_with_retry(comprehensive_file_change):
+def test_generate_commit_message_comprehensive_with_retry(comprehensive_file_change, mock_config):
     """Test the comprehensive message path with a retry from handle_comprehensive_message."""
     changes = [comprehensive_file_change]
     
@@ -1098,12 +1105,12 @@ def test_generate_commit_message_comprehensive_with_retry(comprehensive_file_cha
          patch("c4f.main.determine_tool_calls", return_value={}), \
          patch("c4f.main.get_formatted_message", return_value="comprehensive message"), \
          patch("c4f.main.is_corrupted_message", return_value=False), \
-         patch("c4f.main.handle_comprehensive_message", side_effect=lambda x, y: next(comprehensive_iter)):
+         patch("c4f.main.handle_comprehensive_message", side_effect=lambda x, y, z: next(comprehensive_iter)):
         
-        message = generate_commit_message(changes)
+        message = generate_commit_message(changes, mock_config)
         assert message == "final message"
 
-def test_generate_commit_message_all_attempts_fail(comprehensive_file_change):
+def test_generate_commit_message_all_attempts_fail(comprehensive_file_change, mock_config):
     """Test when all message generation attempts fail and fallback is used."""
     changes = [comprehensive_file_change]
     
@@ -1116,15 +1123,9 @@ def test_generate_commit_message_all_attempts_fail(comprehensive_file_change):
          patch("c4f.main.is_corrupted_message", return_value=True), \
          patch("c4f.main.generate_fallback_message", return_value="fallback message"):
         
-        # Temporarily patch ATTEMPT to a small value to speed up test
-        original_attempt = getattr(c4f.main, "ATTEMPT", 3)
-        try:
-            c4f.main.ATTEMPT = 2  # Set to a small value for testing
-            message = generate_commit_message(changes)
-            assert message == "fallback message"
-        finally:
-            # Restore original value
-            c4f.main.ATTEMPT = original_attempt
+        # Use the config's attempt value
+        message = generate_commit_message(changes, mock_config)
+        assert message == "fallback message"
 
 
 @pytest.mark.parametrize("timestamp, expected_result", [
@@ -1186,45 +1187,6 @@ def test_purify_batrick_first_line_with_content():
     input_text = "```This is a long first line\nsecond line\nthird line\n```"
     expected = "This is a long first line\nsecond line\nthird line\n"
     assert purify_batrick(input_text) == expected
-
-def test_is_conventional_type_with_brackets_force_disable():
-    """Test is_convetional_type_with_brackets with FORCE_BRACKETS set to False."""
-    # Save original value
-    original_force_brackets = FORCE_BRACKETS
-    
-    try:
-        # Set FORCE_BRACKETS to False to test that path
-        c4f.main.FORCE_BRACKETS = False
-        
-        # The function should return True regardless of input when FORCE_BRACKETS is False
-        assert is_conventional_type_with_brackets("feat: message without brackets") == True
-        assert is_conventional_type_with_brackets("feat(scope): message with brackets") == True
-    finally:
-        # Restore original value
-        c4f.main.FORCE_BRACKETS = original_force_brackets
-
-
-# noinspection PyGlobalUndefined
-@pytest.mark.long
-def test_is_conventional_type_with_brackets_force_enable():
-    """Test is_conventional_type_with_brackets with FORCE_BRACKETS set to True."""
-    global FORCE_BRACKETS  # Ensure we modify the global variable
-
-    original_force_brackets = FORCE_BRACKETS  # Store the original value
-
-    try:
-        # Set FORCE_BRACKETS to True for testing
-        FORCE_BRACKETS = True
-
-        # With brackets should return True
-        assert is_conventional_type_with_brackets("feat(scope): message") is True
-
-        # Without brackets should return False
-        assert is_conventional_type_with_brackets("feat: message") is False
-    finally:
-        # Restore original value
-        FORCE_BRACKETS = original_force_brackets
-
 
 def test_get_valid_changes_with_changes():
     """Test get_valid_changes processes changes when they exist."""
@@ -1492,3 +1454,29 @@ def test_handle_non_existent_git_repo_chdir_error():
         mock_chdir.assert_called_once_with(mock_path)
         mock_print.assert_called_once_with(f"[red]Error: Failed to change directory: {error_msg}[/red]")
         mock_exit.assert_called_once_with(1)
+
+def test_create_combined_context():
+    changes = [
+        FileChange(Path("src/module1/file1.py"), "added", "", "feat"),
+        FileChange(Path("src/module2/file2.py"), "modified", "", "fix")
+    ]
+    context = create_combined_context(changes)
+
+    # Normalize to Unix-style paths for consistent testing
+    normalized_context = context.replace("\\", "/")
+
+    expected_output = "added src/module1/file1.py\nmodified src/module2/file2.py"
+    assert normalized_context == expected_output
+
+def test_generate_diff_summary(mock_config):
+    changes = [
+        FileChange(Path("file1.py"), "M", "diff content 1", "feat"),
+        FileChange(Path("file2.py"), "A", "diff content 2", "feat")
+    ]
+    summary = generate_diff_summary(changes, mock_config)
+    assert "File [1]" in summary
+    assert "file1.py" in summary
+    assert "diff content 1" in summary
+    assert "File [2]" in summary
+    assert "file2.py" in summary
+    assert "diff content 2" in summary

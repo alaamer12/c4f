@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock, call
 
+import g4f # type: ignore
 import pytest
 from rich.panel import Panel
 from rich.text import Text
@@ -44,9 +45,10 @@ from c4f.cli import (
     get_banner_description,
     get_epilog_text,
     display_banner,
-    update_global_settings,
     Colors,
-    BANNER_ASCII, main,
+    BANNER_ASCII,
+    main,
+    create_config_from_args
 )
 
 # Test data
@@ -686,8 +688,9 @@ def test_display_banner_general_exception(mock_print):
     # Second call should be with the fallback message
     assert mock_print.call_args[0][0] == "   C4F - Commit For Free"
 
-def test_update_global_settings():
-    """Test update_global_settings updates global variables."""
+
+def test_create_config_from_args():
+    """Test create_config_from_args creates a Config object with correct values."""
     # Create a mock args object
     args = argparse.Namespace(
         force_brackets=True,
@@ -695,28 +698,29 @@ def test_update_global_settings():
         attempts=5,
         model="gpt-4"
     )
-    
-    # Update globals 
-    with patch.dict("c4f.cli.__dict__", {}, clear=True):
-        update_global_settings(args)
-        
-        # Check that the globals were set in the cli module
-        import c4f.cli
-        assert c4f.cli.FORCE_BRACKETS is True
-        assert c4f.cli.FALLBACK_TIMEOUT == 30
-        assert c4f.cli.ATTEMPT == 5
-        assert c4f.cli.MODEL == "gpt-4"
+
+    # Create config from args
+    config = create_config_from_args(args)
+
+    # Check that the config was created with correct values
+    assert config.force_brackets is True
+    assert config.fallback_timeout == 30
+    assert config.attempt == 5
+    assert config.model == g4f.models.gpt_4o  # Check for the model object, not the string
+
 
 def test_main():
     """Test main entry point function without parameters."""
     with patch("c4f.cli.display_banner") as mock_display_banner, \
          patch("c4f.cli.parse_args") as mock_parse_args, \
-         patch("c4f.cli.update_global_settings") as mock_update_settings, \
+         patch("c4f.cli.create_config_from_args") as mock_create_config, \
          patch("c4f.cli.run_main") as mock_run_main:
         
-        # Configure the mock return value for parse_args
+        # Configure the mock return values
         mock_args = MagicMock()
+        mock_config = MagicMock()
         mock_parse_args.return_value = mock_args
+        mock_create_config.return_value = mock_config
         
         # Call the function
         main()
@@ -724,8 +728,8 @@ def test_main():
         # Verify all expected functions were called with correct arguments
         mock_display_banner.assert_called_once()
         mock_parse_args.assert_called_once()
-        mock_update_settings.assert_called_once_with(mock_args)
-        mock_run_main.assert_called_once()
+        mock_create_config.assert_called_once_with(mock_args)
+        mock_run_main.assert_called_once_with(mock_config)
 
 @pytest.mark.parametrize("help_flag", ['-h', '--help', '-v', '--version'])
 def test_main_with_help_flags(help_flag):
@@ -733,12 +737,14 @@ def test_main_with_help_flags(help_flag):
     with patch("c4f.cli.sys.argv", [help_flag]), \
          patch("c4f.cli.display_banner") as mock_display_banner, \
          patch("c4f.cli.parse_args") as mock_parse_args, \
-         patch("c4f.cli.update_global_settings") as mock_update_settings, \
+         patch("c4f.cli.create_config_from_args") as mock_create_config, \
          patch("c4f.cli.run_main") as mock_run_main:
         
-        # Configure the mock return value for parse_args
+        # Configure the mock return values
         mock_args = MagicMock()
+        mock_config = MagicMock()
         mock_parse_args.return_value = mock_args
+        mock_create_config.return_value = mock_config
         
         # Call the function
         main()
@@ -746,8 +752,8 @@ def test_main_with_help_flags(help_flag):
         # Verify banner was not displayed (help flags present)
         mock_display_banner.assert_not_called()
         mock_parse_args.assert_called_once()
-        mock_update_settings.assert_called_once_with(mock_args)
-        mock_run_main.assert_called_once()
+        mock_create_config.assert_called_once_with(mock_args)
+        mock_run_main.assert_called_once_with(mock_config)
 
 @pytest.mark.parametrize("cli_args,expected_display_banner", [
     # Test no arguments (default behavior)
@@ -783,12 +789,14 @@ def test_main_with_various_arguments(cli_args, expected_display_banner):
     with patch("c4f.cli.sys.argv", argv), \
          patch("c4f.cli.display_banner") as mock_display_banner, \
          patch("c4f.cli.parse_args") as mock_parse_args, \
-         patch("c4f.cli.update_global_settings") as mock_update_settings, \
+         patch("c4f.cli.create_config_from_args") as mock_create_config, \
          patch("c4f.cli.run_main") as mock_run_main:
         
-        # Configure the mock return value for parse_args
+        # Configure the mock return values
         mock_args = MagicMock()
+        mock_config = MagicMock()
         mock_parse_args.return_value = mock_args
+        mock_create_config.return_value = mock_config
         
         # Call the function
         main()
@@ -800,39 +808,41 @@ def test_main_with_various_arguments(cli_args, expected_display_banner):
             mock_display_banner.assert_not_called()
             
         mock_parse_args.assert_called_once()
-        mock_update_settings.assert_called_once_with(mock_args)
-        mock_run_main.assert_called_once()
+        mock_create_config.assert_called_once_with(mock_args)
+        mock_run_main.assert_called_once_with(mock_config)
 
 @pytest.mark.parametrize("test_name,exceptions,expectation", [
     ("parse_args_exception",
      {"parse_args": Exception("Parse error")},
-     {"display_banner": True, "update_settings": False, "run_main": False}),
+     {"display_banner": True, "create_config": False, "run_main": False}),
     
-    ("update_settings_exception",
-     {"update_settings": Exception("Settings error")},
+    ("create_config_exception",
+     {"create_config": Exception("Config error")},
      {"display_banner": True, "parse_args": True, "run_main": False}),
     
     ("run_main_exception",
      {"run_main": Exception("Main error")},
-     {"display_banner": True, "parse_args": True, "update_settings": True}),
+     {"display_banner": True, "parse_args": True, "create_config": True}),
 ])
 def test_main_exception_handling(test_name, exceptions, expectation):
     """Test main function exception handling for various components."""
     with patch("c4f.cli.display_banner") as mock_display_banner, \
          patch("c4f.cli.parse_args") as mock_parse_args, \
-         patch("c4f.cli.update_global_settings") as mock_update_settings, \
+         patch("c4f.cli.create_config_from_args") as mock_create_config, \
          patch("c4f.cli.run_main") as mock_run_main:
         
         # Configure mocks to raise exceptions if specified
         mock_args = MagicMock()
+        mock_config = MagicMock()
         mock_parse_args.return_value = mock_args
+        mock_create_config.return_value = mock_config
         
         if "display_banner" in exceptions:
             mock_display_banner.side_effect = exceptions["display_banner"]
         if "parse_args" in exceptions:
             mock_parse_args.side_effect = exceptions["parse_args"]
-        if "update_settings" in exceptions:
-            mock_update_settings.side_effect = exceptions["update_settings"]
+        if "create_config" in exceptions:
+            mock_create_config.side_effect = exceptions["create_config"]
         if "run_main" in exceptions:
             mock_run_main.side_effect = exceptions["run_main"]
         
@@ -850,7 +860,7 @@ def test_main_exception_handling(test_name, exceptions, expectation):
             mock_display_banner.assert_called_once()
         if expectation.get("parse_args", False):
             mock_parse_args.assert_called_once()
-        if expectation.get("update_settings", False):
-            mock_update_settings.assert_called_once_with(mock_args)
+        if expectation.get("create_config", False):
+            mock_create_config.assert_called_once_with(mock_args)
         if expectation.get("run_main", False):
-            mock_run_main.assert_called_once()
+            mock_run_main.assert_called_once_with(mock_config)
