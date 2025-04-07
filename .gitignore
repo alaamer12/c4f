@@ -90,3 +90,4 @@ Thumbs.db
 .benchmarks/
 .idea/*
 /assets/_assets/
+/tests/har_and_cookies/
