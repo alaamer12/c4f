@@ -4,16 +4,6 @@ This module provides an automated solution for generating meaningful Git commit 
 based on the changes in your repository. It analyzes file changes, categorizes them by type,
 and generates descriptive commit messages using AI assistance.
 
-Attributes:
-    MODEL_TYPE (Union): Type alias for the supported model types.
-    FORCE_BRACKETS (bool): Whether to force brackets in commit messages.
-    PROMPT_THRESHOLD (int): Threshold in lines to determine comprehensive messages.
-    FALLBACK_TIMEOUT (int): Timeout in seconds before falling back to simple messages.
-    MIN_COMPREHENSIVE_LENGTH (int): Minimum length for comprehensive commit messages.
-    ATTEMPT (int): Number of attempts to generate a commit message.
-    DIFF_MAX_LENGTH (int): Maximum number of lines to include in diff snippets.
-    MODEL (MODEL_TYPE): The AI model to use for generating commit messages.
-
 Example:
     To use as a command-line tool:
 
@@ -29,39 +19,22 @@ import concurrent.futures
 import os
 import re
 import sys
-import warnings
 from collections import defaultdict
 from concurrent.futures import TimeoutError
 from datetime import datetime
 from pathlib import Path
-from typing import List, Tuple, Optional, Union, Literal, Dict, Any, Final, Callable
+from typing import List, Tuple, Optional, Union, Literal, Dict, Any, Callable
 
 import g4f  # type: ignore
-
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 
 from c4f.utils import console, client, SubprocessHandler, FileChange
+from c4f.config import Config
 
-
-
-MODEL_TYPE = Union[g4f.Model, g4f.models, str]
-
-# ROOT = Path(__file__).parent
-FORCE_BRACKETS = False
-if FORCE_BRACKETS:
-    warnings.warn("Forcing brackets can lead to longer commit message generation and failures.", UserWarning)
-
-PROMPT_THRESHOLD: Final[int] = 80  # lines
-FALLBACK_TIMEOUT: Final[int] = 10  # secs
-MIN_COMPREHENSIVE_LENGTH: Final[int] = 50  # minimum length for comprehensive commit messages
-ATTEMPT: Final[int] = 3  # number of attempts
-DIFF_MAX_LENGTH: Final[int] = 100
-MODEL: Final[MODEL_TYPE] = g4f.models.gpt_4o_mini
-
-__dir__ = ["main", "FORCE_BRACKETS", "FALLBACK_TIMEOUT", "ATTEMPT", "MODEL"]
+__dir__ = ["main"]
 
 
 def run_git_command(command: List[str], timeout: Optional[int] = None) -> Tuple[str, str, int]:
@@ -213,15 +186,22 @@ def get_file_diff(file_path: str) -> str:
     return get_tracked_file_diff(file_path)
 
 
-def shorten_diff(diff: str) -> str:
+def shorten_diff(diff: str, config: Config) -> str:
     """Shorten a diff to a maximum number of lines.
     
     Truncates diffs that are longer than DIFF_MAX_LENGTH and adds an indicator.
+    
+    Args:
+        diff: The diff to shorten.
+        config: Configuration object with settings for the commit message generator.
+        
+    Returns:
+        str: The shortened diff.
     """
     lines = diff.strip().splitlines()
 
-    if len(lines) > DIFF_MAX_LENGTH:
-        lines = lines[:DIFF_MAX_LENGTH] + ["\n...\n\n"]
+    if len(lines) > config.diff_max_length:
+        lines = lines[:config.diff_max_length] + ["\n...\n\n"]
 
     return "\n".join(lines)
 
@@ -434,28 +414,35 @@ def group_related_changes(changes: List[FileChange]) -> List[List[FileChange]]:
     return list(groups.values())
 
 
-def generate_commit_message(changes: List[FileChange]) -> str:
+def generate_commit_message(changes: List[FileChange], config: Config) -> str:
     """Generate a commit message for a list of file changes.
     
     Uses an AI model to generate appropriate commit messages based on the changes.
     For larger changes, generates a more comprehensive message.
     Falls back to a simple message if message generation fails.
+    
+    Args:
+        changes: List of file changes to generate a commit message for.
+        config: Configuration object with settings for the commit message generator.
+        
+    Returns:
+        str: The generated commit message.
     """
     combined_context = create_combined_context(changes)
     total_diff_lines = calculate_total_diff_lines(changes)
-    is_comprehensive = total_diff_lines >= PROMPT_THRESHOLD
-    diffs_summary = generate_diff_summary(changes) if is_comprehensive else ""
+    is_comprehensive = total_diff_lines >= config.prompt_threshold
+    diffs_summary = generate_diff_summary(changes, config) if is_comprehensive else ""
 
-    tool_calls = determine_tool_calls(is_comprehensive, combined_context, diffs_summary)
+    tool_calls = determine_tool_calls(is_comprehensive, combined_context, diffs_summary, config)
 
-    for _ in range(ATTEMPT):
-        message = get_formatted_message(combined_context, tool_calls, changes, total_diff_lines)
+    for _ in range(config.attempt):
+        message = get_formatted_message(combined_context, tool_calls, changes, total_diff_lines, config)
 
-        if is_corrupted_message(message):
+        if is_corrupted_message(message, config):
             continue
 
         if is_comprehensive:
-            result = handle_comprehensive_message(message, changes)
+            result = handle_comprehensive_message(message, changes, config)
             if result in ["retry", "r"]:
                 continue
             if result:
@@ -466,7 +453,7 @@ def generate_commit_message(changes: List[FileChange]) -> str:
     return generate_fallback_message(changes)
 
 
-def is_corrupted_message(message: str) -> bool:
+def is_corrupted_message(message: str, config: Config) -> bool:
     """Check if a generated message is corrupted or invalid.
     
     A message is considered corrupted if it's empty, doesn't follow conventional commit
@@ -474,17 +461,17 @@ def is_corrupted_message(message: str) -> bool:
     """
     return (not message
             or not is_conventional_type(message)
-            or not is_conventional_type_with_brackets(message)
+            or not is_conventional_type_with_brackets(message, config)
             )
 
 
-def get_formatted_message(combined_context, tool_calls, changes, total_diff_lines):
+def get_formatted_message(combined_context, tool_calls, changes, total_diff_lines, config):
     """Get a formatted commit message using the model.
     
     Attempts to generate a message and then purifies it to remove any unwanted content.
     """
     # Attempt to get Message
-    message = attempt_generate_message(combined_context, tool_calls, changes, total_diff_lines)
+    message = attempt_generate_message(combined_context, tool_calls, changes, total_diff_lines, config)
 
     # Purify Message
     message = purify_message(message)
@@ -527,12 +514,12 @@ def is_conventional_type(message: str) -> bool:
     return True
 
 
-def is_conventional_type_with_brackets(message: str) -> bool:
+def is_conventional_type_with_brackets(message: str, config: Config) -> bool:
     """Check if a message follows conventional commit type format with brackets.
     
     If FORCE_BRACKETS is enabled, ensures the message has brackets in the first word.
     """
-    if not FORCE_BRACKETS:
+    if not config.force_brackets:
         return True
 
     first_word: str = message.split()[0]
@@ -638,10 +625,19 @@ def purify_message(message: Optional[str]) -> Optional[str]:
     return message
 
 
-def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summary: str = "") -> Dict[str, Any]:
+def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summary: str = "", config: Optional[Config] = None) -> Dict[str, Any]:
     """Determine the appropriate tool calls based on the comprehensiveness of the change.
     
     Selects either a simple or comprehensive tool call based on the size of changes.
+    
+    Args:
+        is_comprehensive: Whether the change is comprehensive.
+        combined_text: The combined text of all changes.
+        diffs_summary: A summary of all diffs.
+        config: Configuration object with settings for the commit message generator.
+        
+    Returns:
+        Dict[str, Any]: The tool calls to use.
     """
     if is_comprehensive:
         return create_comprehensive_tool_call(combined_text, diffs_summary)
@@ -701,16 +697,16 @@ def create_comprehensive_tool_call(combined_text: str, diffs_summary: str) -> Di
 
 
 def attempt_generate_message(combined_context: str, tool_calls: Dict[str, Any], changes: List[FileChange],
-                             total_diff_lines: int) -> Optional[str]:
+                             total_diff_lines: int, config: Config) -> Optional[str]:
     """Attempt to generate a commit message using the model.
     
     Uses the appropriate prompt based on the size of changes and sends it to the model.
     """
-    prompt = determine_prompt(combined_context, changes, total_diff_lines)
-    return model_prompt(prompt, tool_calls)
+    prompt = determine_prompt(combined_context, changes, total_diff_lines, config)
+    return model_prompt(prompt, tool_calls, config)
 
 
-def handle_comprehensive_message(message: Optional[str], changes: List[FileChange]) -> (
+def handle_comprehensive_message(message: Optional[str], changes: List[FileChange], config: Config) -> (
         Optional)[Union[str, Literal["retry"]]]:
     """Handle a comprehensive commit message, with user interaction for short messages.
     
@@ -720,7 +716,7 @@ def handle_comprehensive_message(message: Optional[str], changes: List[FileChang
     if not message:
         return None
 
-    if len(message) < MIN_COMPREHENSIVE_LENGTH:
+    if len(message) < config.min_comprehensive_length:
         action = handle_short_comprehensive_message(message).strip().lower()
         while action not in ["use", 'u', 'retry', 'r', 'fallback', 'f']:
             action = input("\nChoose an option between the options above: or leave it empty to use: ").strip()
@@ -783,39 +779,46 @@ def generate_fallback_message(changes: List[FileChange]) -> str:
     return f"{changes[0].type}: update {' '.join(str(c.path.name) for c in changes)}"
 
 
-def generate_diff_summary(changes):
+def generate_diff_summary(changes: List[FileChange], config: Config) -> str:
     """Generate a summary of diffs for all changes.
     
     Creates a formatted summary of all diffs, shortening them if necessary.
+    
+    Args:
+        changes: List of file changes to summarize.
+        config: Configuration object with settings for the commit message generator.
+        
+    Returns:
+        str: A formatted summary of all diffs.
     """
     return "\n".join([
-        shorten_diff(f"File [{i + 1}]: {change.path}\nStatus: {change.status}\nChanges:\n{change.diff}\n")
+        shorten_diff(f"File [{i + 1}]: {change.path}\nStatus: {change.status}\nChanges:\n{change.diff}\n", config)
         for i, change in enumerate(changes)
     ])
 
 
-def determine_prompt(combined_text: str, changes: List[FileChange], diff_lines: int) -> str:
+def determine_prompt(combined_text: str, changes: List[FileChange], diff_lines: int, config: Config) -> str:
     """Determine the appropriate prompt based on the size of changes.
     
     Uses a simple prompt for small changes and a comprehensive prompt for larger ones.
     """
     # For small changes (less than 50 lines), use a simple inline commit message
-    if diff_lines < PROMPT_THRESHOLD:
-        return generate_simple_prompt(combined_text)
+    if diff_lines < config.prompt_threshold:
+        return generate_simple_prompt(combined_text, config)
 
     # For larger changes, create a comprehensive commit message with details
-    diffs_summary = generate_diff_summary(changes)
+    diffs_summary = generate_diff_summary(changes, config)
 
-    return generate_comprehensive_prompt(combined_text, diffs_summary)
+    return generate_comprehensive_prompt(combined_text, diffs_summary, config)
 
 
-def generate_simple_prompt(combined_text):
+def generate_simple_prompt(combined_text, config: Config):
     """Generate a prompt for a simple commit message.
     
     Creates a prompt instructing the model to generate a conventional commit message
     for smaller changes.
     """
-    force_brackets_line = "Please use brackets with conventional commits [e.g. feat(main): ...]" if FORCE_BRACKETS else ""
+    force_brackets_line = "Please use brackets with conventional commits [e.g. feat(main): ...]" if config.force_brackets else ""
     return f"""
         Analyze these file changes and generate a conventional commit message:
         {combined_text}
@@ -825,13 +828,13 @@ def generate_simple_prompt(combined_text):
         """
 
 
-def generate_comprehensive_prompt(combined_text, diffs_summary):
+def generate_comprehensive_prompt(combined_text, diffs_summary, config: Config):
     """Generate a prompt for a comprehensive commit message.
     
     Creates a detailed prompt with rules and guidelines for generating a
     comprehensive conventional commit message.
     """
-    force_brackets_line = "Please use brackets with conventional commits [e.g. feat(main): ...]" if FORCE_BRACKETS else ""
+    force_brackets_line = "Please use brackets with conventional commits [e.g. feat(main): ...]" if config.force_brackets else ""
     return f"""
     Analyze these file changes and generate a detailed conventional commit message:
 
@@ -863,23 +866,39 @@ def generate_comprehensive_prompt(combined_text, diffs_summary):
     """
 
 
-def model_prompt(prompt: str, tool_calls: Dict[str, Any]) -> str:
+def model_prompt(prompt: str, tool_calls: Dict[str, Any], config: Config) -> str:
     """Send a prompt to the model and get a response.
     
     Wraps the model call with a progress indicator.
+    
+    Args:
+        prompt: The prompt to send to the model.
+        tool_calls: The tool calls to include in the request.
+        config: Configuration object with settings for the commit message generator.
+        
+    Returns:
+        str: The model's response.
     """
-    return execute_with_progress(get_model_response, prompt, tool_calls)
+    return execute_with_progress(get_model_response, prompt, tool_calls, config)
 
 
-def get_model_response(prompt: str, tool_calls: Dict[str, Any]) -> Optional[str]:
+def get_model_response(prompt: str, tool_calls: Dict[str, Any], config: Config) -> Optional[str]:
     """Get a response from the model.
     
     Makes an API call to the model with the given prompt and tool calls.
     Handles errors and returns the model's response content.
+    
+    Args:
+        prompt: The prompt to send to the model.
+        tool_calls: The tool calls to include in the request.
+        config: Configuration object with settings for the commit message generator.
+        
+    Returns:
+        Optional[str]: The model's response, or None if an error occurred.
     """
     try:
         response = client.chat.completions.create(
-            model=MODEL,
+            model=config.model,
             messages=[
                 {"role": "system", "content": "Follow instructions precisely and respond concisely."},
                 {"role": "user", "content": prompt}
@@ -902,12 +921,26 @@ def execute_with_progress(func, *args):
         return execute_with_timeout(func, progress, task, *args)
 
 
-def execute_with_timeout(func, progress, task, *args, timeout=FALLBACK_TIMEOUT):
+def execute_with_timeout(func, progress, task, *args, timeout=None):
     """Execute a function with a timeout.
     
     Runs the function in a separate thread and cancels it if it takes too long.
     Handles errors and cleans up the progress display.
+    
+    Args:
+        func: The function to execute.
+        progress: The progress object to update.
+        task: The task ID to update.
+        *args: Arguments to pass to the function.
+        timeout: The timeout in seconds. If None, uses the config's fallback_timeout.
+        
+    Returns:
+        The result of the function, or None if it timed out or raised an exception.
     """
+    # Extract config from args if it's the last argument
+    config = args[-1] if args and isinstance(args[-1], Config) else None
+    timeout = timeout or (config.fallback_timeout if config else 10)
+    
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future = executor.submit(func, *args)
         try:
@@ -1155,11 +1188,19 @@ def handle_non_existent_git_repo() -> None:
         sys.exit(1)
 
 
-def main():
+def main(config: Optional[Config] = None):
     """Main entry point for the program.
     
     Handles repository verification, gets file changes, and processes commit messages.
+    
+    Args:
+        config: Configuration object with settings for the commit message generator.
+               If None, uses default configuration.
     """
+    if config is None:
+        from c4f.config import default_config
+        config = default_config
+        
     handle_non_existent_git_repo()
     reset_staging()
     changes = get_valid_changes()
@@ -1172,9 +1213,9 @@ def main():
     accept_all = False
     for group in groups:
         if accept_all:
-            process_change_group(group, accept_all=True)
+            process_change_group(group, config, accept_all=True)
         else:
-            accept_all = process_change_group(group)
+            accept_all = process_change_group(group, config)
 
 
 def get_valid_changes():
@@ -1263,13 +1304,18 @@ def exit_with_no_changes():
     sys.exit(0)
 
 
-def process_change_group(group: List["FileChange"], accept_all: bool = False) -> bool:
+def process_change_group(group: List["FileChange"], config: Config, accept_all: bool = False) -> bool:
     """Process a group of related file changes.
     
-    Generates a commit message and prompts the user to proceed.
-    Returns True if the user chose to accept all future commits.
+    Args:
+        group: List of file changes to process.
+        config: Configuration object with settings for the commit message generator.
+        accept_all: Whether to accept all future commits without prompting.
+        
+    Returns:
+        bool: True if the user chose to accept all future commits.
     """
-    message = generate_commit_message(group)
+    message = generate_commit_message(group, config)
 
     # Style Message
     md = Markdown(message)
@@ -1353,4 +1399,5 @@ def display_commit_preview(message):
 
 
 if __name__ == "__main__":
-    main()
+    from c4f.config import default_config
+    main(default_config)

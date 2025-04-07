@@ -28,6 +28,8 @@ from rich.text import Text
 
 # Import main functionality here to avoid circular imports
 from c4f.main import main as run_main
+from c4f.config import Config
+import g4f # type: ignore
 
 __all__ = ["run_main"]
 
@@ -521,18 +523,29 @@ def display_banner() -> None:
         print(f"   C4F - Commit For Free")
 
 
-def update_global_settings(args: argparse.Namespace) -> None:
-    """Update global constants based on CLI arguments.
+def create_config_from_args(args: argparse.Namespace) -> Config:
+    """Create a Config object from command line arguments.
     
     Args:
         args: Parsed command line arguments.
+        
+    Returns:
+        Config: A configuration object with settings from the command line.
     """
-    globals().update({
-        'FORCE_BRACKETS': args.force_brackets,
-        'FALLBACK_TIMEOUT': args.timeout,
-        'ATTEMPT': args.attempts,
-        'MODEL': args.model,
-    })
+    # Convert string model name to g4f model object
+    model_mapping = {
+        "gpt-4-mini": g4f.models.gpt_4o_mini,
+        "gpt-4": g4f.models.gpt_4o,
+    }
+    
+    model = model_mapping.get(args.model, g4f.models.gpt_4o_mini)
+    
+    return Config(
+        force_brackets=args.force_brackets,
+        fallback_timeout=args.timeout,
+        attempt=args.attempts,
+        model=model,
+    )
 
 
 def main() -> None:
@@ -549,11 +562,11 @@ def main() -> None:
     # Parse command line arguments
     args = parse_args()
 
-    # Update global settings based on arguments
-    update_global_settings(args)
+    # Create configuration from arguments
+    config = create_config_from_args(args)
 
-    # Run the main program
-    run_main()
+    # Run the main program with the configuration
+    run_main(config)
 
 
 if __name__ == "__main__":
