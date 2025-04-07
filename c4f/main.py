@@ -28,26 +28,24 @@ Example:
 import concurrent.futures
 import os
 import re
-import subprocess
 import sys
 import warnings
 from collections import defaultdict
 from concurrent.futures import TimeoutError
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple, Optional, Union, Literal, Dict, Any, Final, Callable
 
 import g4f  # type: ignore
-from g4f.client import Client  # type: ignore
-from rich.console import Console
+
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 
-console = Console()
-client = Client()
+from c4f.utils import console, client, SubprocessHandler, FileChange
+
+
 
 MODEL_TYPE = Union[g4f.Model, g4f.models, str]
 
@@ -66,96 +64,18 @@ MODEL: Final[MODEL_TYPE] = g4f.models.gpt_4o_mini
 __dir__ = ["main", "FORCE_BRACKETS", "FALLBACK_TIMEOUT", "ATTEMPT", "MODEL"]
 
 
-@dataclass
-class FileChange:
-    path: Path
-    status: Literal["M", "A", "D", "R"]
-    diff: str
-    type: Optional[str] = None  # 'feat', 'fix', 'docs', etc.
-    diff_lines: int = 0
-    last_modified: float = 0.0
-
-    def __post_init__(self):
-        self.diff_lines = len(self.diff.strip().splitlines())
-        self.last_modified = os.path.getmtime(self.path) if os.path.exists(self.path) else 0.0
-
-
-def create_subprocess_env() -> Dict[str, str]:
-    """Create environment with explicit encoding settings for subprocess.
-    
-    Returns:
-        Dict[str, str]: Environment variables dictionary with encoding settings.
-    """
-    env = os.environ.copy()
-    env['PYTHONIOENCODING'] = 'utf-8'
-    return env
-
-
-def run_subprocess_text_mode(command: List[str], encoding: str, errors: str) -> Tuple[str, str, int]:
-    """Run subprocess in text mode with specified encoding.
+def run_git_command(command: List[str], timeout: Optional[int] = None) -> Tuple[str, str, int]:
+    """Run a git command and return its output.
     
     Args:
-        command: Command to execute as a list of strings.
-        encoding: Character encoding to use.
-        errors: How to handle encoding/decoding errors.
+        command: The git command to run as a list of strings.
+        timeout: Maximum time in seconds to wait for the process to complete.
         
     Returns:
         Tuple[str, str, int]: stdout, stderr, and return code.
     """
-    env = create_subprocess_env()
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding=encoding,
-        errors=errors,
-        env=env,
-        universal_newlines=True
-    )
-    stdout, stderr = process.communicate()
-    return stdout, stderr, process.returncode
-
-
-def run_subprocess_binary_mode(command: List[str], encoding: str, errors: str) -> Tuple[str, str, int]:
-    """Run subprocess in binary mode with manual decoding.
-    
-    Args:
-        command: Command to execute as a list of strings.
-        encoding: Character encoding to use for decoding.
-        errors: How to handle encoding/decoding errors.
-        
-    Returns:
-        Tuple[str, str, int]: decoded stdout, stderr, and return code.
-    """
-    env = create_subprocess_env()
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env
-    )
-    stdout_bytes, stderr_bytes = process.communicate()
-    stdout = stdout_bytes.decode(encoding, errors=errors)
-    stderr = stderr_bytes.decode(encoding, errors=errors)
-    return stdout, stderr, process.returncode
-
-
-def run_git_command(command: List[str]) -> Tuple[str, str, int]:
-    """Execute a git command and return its output.
-    
-    The command is executed as a subprocess and the function waits for it to complete.
-    Returns stdout, stderr, and the return code as a tuple.
-    """
-    # Set default encoding to UTF-8 with error handling for Windows compatibility
-    encoding = 'utf-8'
-    errors = 'replace'  # Replace invalid chars with a replacement marker
-
-    try:
-        return run_subprocess_text_mode(command, encoding, errors)
-    except UnicodeDecodeError:
-        # Fall back to binary mode and manual decoding if text mode fails
-        return run_subprocess_binary_mode(command, encoding, errors)
+    handler = SubprocessHandler()
+    return handler.run_command(command, timeout)
 
 
 def get_root_git_workspace() -> Path:
