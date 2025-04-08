@@ -1480,3 +1480,491 @@ def test_generate_diff_summary(mock_config):
     assert "File [2]" in summary
     assert "file2.py" in summary
     assert "diff content 2" in summary
+
+
+# Test for line 63: Error handling in run_git_command
+def test_run_git_command_error():
+    with patch("subprocess.Popen") as mock_popen:
+        mock_process = MagicMock()
+        mock_process.communicate.side_effect = Exception("Test error")
+        mock_popen.return_value = mock_process
+
+        with pytest.raises(Exception):
+            run_git_command(["git", "status"])
+
+
+# Test for lines 102-103: Error handling in get_git_status_output
+def test_get_git_status_output_error():
+    with patch("c4f.main.run_git_command") as mock_run_git:
+        mock_run_git.side_effect = Exception("Test error")
+
+        with pytest.raises(Exception):
+            get_git_status_output()
+
+
+# Test for line 131: Error handling in handle_git_status_error
+def test_handle_git_status_error():
+    with patch("c4f.main.console.print") as mock_print:
+        with patch("sys.exit") as mock_exit:
+            handle_git_status_error("Test error")
+            mock_print.assert_called_once()
+            mock_exit.assert_called_once_with(1)
+
+
+# Test for lines 169-173: Error handling in process_untracked_file
+def test_process_untracked_file_directory_error():
+    with patch("pathlib.Path.is_dir", return_value=True):
+        with patch("c4f.main.list_untracked_files") as mock_list:
+            mock_list.return_value = []  # Return empty list on error
+            result = process_untracked_file("??", "test_dir")
+            assert result == []
+
+
+# Test for line 232: Error handling in process_renamed_file
+def test_process_renamed_file_error():
+    with pytest.raises(IndexError):
+        process_renamed_file("invalid_path")
+
+
+# Test for line 273: Error handling in process_git_status_line
+def test_process_git_status_line_error():
+    with patch("c4f.main.process_untracked_file") as mock_process:
+        mock_process.return_value = []  # Return empty list on error
+        result = process_git_status_line("?? file.txt")
+        assert result == []
+
+
+# Test for lines 452->442: Branch in parse_git_status
+def test_parse_git_status_empty_output():
+    with patch("c4f.main.get_git_status_output", return_value=("", "", 0)):
+        result = parse_git_status()
+        assert result == []
+
+
+# Test for lines 478-483: Error handling in list_untracked_files
+def test_list_untracked_files_error():
+    with patch("pathlib.Path.glob") as mock_glob:
+        mock_glob.return_value = []  # Return empty list on error
+        result = list_untracked_files(Path("test_dir"))
+        assert result == []
+
+
+# Test for lines 732->734: Branch in get_tracked_file_diff
+def test_get_tracked_file_diff_error():
+    with patch("c4f.main.run_git_command") as mock_run_git:
+        mock_run_git.side_effect = [
+            ("", "", 1),  # First call fails
+            ("", "", 1)  # Second call fails
+        ]
+        result = get_tracked_file_diff("test_file.txt")
+        assert result == ""
+
+
+# Test for line 750: Error handling in handle_untracked_file
+def test_handle_untracked_file_error():
+    with patch("pathlib.Path.exists", return_value=True):
+        with patch("os.access", return_value=True):
+            with patch("c4f.main.read_file_content", side_effect=Exception("Test error")):
+                with patch("c4f.main.console.print") as mock_print:
+                    result = handle_untracked_file(Path("test_file.txt"))
+                    assert result == "Error: Test error"
+                    mock_print.assert_called_once()
+
+
+# Test for lines 1206-1207: Error handling in process_single_file
+def test_process_single_file_error():
+    with patch("c4f.main.get_file_diff", return_value=""):  # Return empty diff to trigger None return
+        with patch("c4f.main.Progress") as mock_progress:
+            mock_progress_instance = MagicMock()
+            mock_progress.return_value.__enter__.return_value = mock_progress_instance
+            mock_progress_instance.add_task.return_value = 1
+
+            result = process_single_file("M", "test_file.txt", mock_progress_instance, 1)
+            assert result is None
+
+
+# Test for line 1213: Error handling in create_file_change
+def test_create_file_change_error():
+    with patch("c4f.main.get_file_diff", return_value=""):  # Return empty diff to trigger None return
+        result = create_file_change("M", "test_file.txt")
+        assert result is None
+
+
+# Test for line 1221: Error handling in process_changed_files
+def test_process_changed_files_error():
+    with patch("c4f.main.Progress") as mock_progress:
+        mock_progress_instance = MagicMock()
+        mock_progress.return_value.__enter__.return_value = mock_progress_instance
+        mock_progress_instance.add_task.return_value = 1
+
+        with patch("c4f.main.process_single_file", return_value=None):  # Return None to simulate error
+            result = process_changed_files([("M", "test_file.txt")])
+            assert result == []
+
+
+
+# Test for lines 1376-1377: Error handling in find_git_root
+def test_find_git_root_error():
+    with patch("c4f.main.run_git_command", side_effect=Exception("Test error")):
+        with pytest.raises(FileNotFoundError):
+            find_git_root()
+
+
+# Additional test for process_untracked_file
+def test_process_untracked_file_regular_file():
+    with patch("pathlib.Path.is_dir", return_value=False):
+        result = process_untracked_file("??", "test_file.txt")
+        assert result == [("A", "test_file.txt")]
+
+
+# Additional test for process_git_status_line with renamed file
+def test_process_git_status_line_renamed():
+    result = process_git_status_line("R  old.txt -> new.txt")
+    assert result == [("R", "new.txt")]
+
+
+# Additional test for process_git_status_line with regular change
+def test_process_git_status_line_regular():
+    result = process_git_status_line("M  file.txt")
+    assert result == [("M", "file.txt")]
+
+
+# Additional test for get_tracked_file_diff with unstaged changes
+def test_get_tracked_file_diff_unstaged():
+    with patch("c4f.main.run_git_command") as mock_run_git:
+        mock_run_git.side_effect = [
+            ("", "", 0),  # No staged changes
+            ("unstaged diff", "", 0)  # Unstaged changes
+        ]
+        result = get_tracked_file_diff("test_file.txt")
+        assert result == "unstaged diff"
+
+
+# Test for determine_tool_calls function
+def test_determine_tool_calls_comprehensive():
+    result = determine_tool_calls(True, "test text", "test summary")
+    assert result["function"]["name"] == "generate_commit"
+    assert result["function"]["arguments"]["format"] == "detailed"
+
+
+def test_determine_tool_calls_simple():
+    result = determine_tool_calls(False, "test text")
+    assert result["function"]["name"] == "generate_commit"
+    assert result["function"]["arguments"]["format"] == "inline"
+
+
+# Test for create_simple_tool_call function
+def test_create_simple_tool_call():
+    result = create_simple_tool_call("test text")
+    assert result["function"]["name"] == "generate_commit"
+    assert result["function"]["arguments"]["style"] == "conventional"
+    assert result["function"]["arguments"]["max_length"] == 72
+
+
+# Test for create_comprehensive_tool_call function
+def test_create_comprehensive_tool_call():
+    result = create_comprehensive_tool_call("test text", "test summary")
+    assert result["function"]["name"] == "generate_commit"
+    assert result["function"]["arguments"]["style"] == "conventional"
+    assert result["function"]["arguments"]["format"] == "detailed"
+
+
+# Test for handle_comprehensive_message function
+def test_handle_comprehensive_message_short():
+    with patch("c4f.main.handle_short_comprehensive_message") as mock_handle:
+        mock_handle.return_value = "use"
+        config = MagicMock()
+        config.min_comprehensive_length = 100
+        result = handle_comprehensive_message("short message", [], config)
+        assert result == "short message"
+
+
+
+
+# Test for calculate_total_diff_lines function
+
+
+
+
+def test_handle_short_comprehensive_message_fallback():
+    with patch("builtins.input", return_value="3"):
+        result = handle_short_comprehensive_message("test message")
+        assert result == "fallback"
+
+
+# Test for main function
+def test_main_no_changes():
+    with patch("c4f.main.handle_non_existent_git_repo"):
+        with patch("c4f.main.reset_staging"):
+            with patch("c4f.main.get_valid_changes", return_value=[]):
+                with patch("c4f.main.exit_with_no_changes") as mock_exit:
+                    main()
+                    mock_exit.assert_called_once()
+
+
+def test_main_with_changes():
+    changes = [
+        FileChange(status="M", path=Path("test.txt"), type="feat", diff="test", diff_lines=5, last_modified=0)
+    ]
+    with patch("c4f.main.handle_non_existent_git_repo"):
+        with patch("c4f.main.reset_staging"):
+            with patch("c4f.main.get_valid_changes", return_value=changes):
+                with patch("c4f.main.display_changes"):
+                    with patch("c4f.main.group_related_changes", return_value=[changes]):
+                        with patch("c4f.main.process_change_group", return_value=True):
+                            main()
+
+
+# Test for get_valid_changes function
+def test_get_valid_changes_empty():
+    with patch("c4f.main.parse_git_status", return_value=[]):
+        result = get_valid_changes()
+        assert result == []
+
+
+# Test for get_model_response function
+def test_get_model_response_success():
+    with patch("c4f.main.client.chat.completions.create") as mock_create:
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "test message"
+        mock_create.return_value = mock_response
+        config = MagicMock()
+        result = get_model_response("test prompt", {}, config)
+        assert result == "test message"
+
+
+def test_get_model_response_error():
+    with patch("c4f.main.client.chat.completions.create", side_effect=Exception("Test error")):
+        with patch("c4f.main.console.print") as mock_print:
+            config = MagicMock()
+            result = get_model_response("test prompt", {}, config)
+            assert result is None
+            mock_print.assert_called_once()
+
+
+
+# Test for execute_with_timeout function
+def test_execute_with_timeout_success():
+    with patch("concurrent.futures.ThreadPoolExecutor") as mock_executor:
+        mock_future = MagicMock()
+        mock_future.result.return_value = "test result"
+        mock_executor.return_value.__enter__.return_value.submit.return_value = mock_future
+
+        progress = MagicMock()
+        task = MagicMock()
+        result = execute_with_timeout(lambda: "test result", progress, task)
+        assert result == "test result"
+
+
+def test_execute_with_timeout_timeout():
+    with patch("concurrent.futures.ThreadPoolExecutor") as mock_executor:
+        mock_future = MagicMock()
+        mock_future.result.side_effect = TimeoutError()
+        mock_executor.return_value.__enter__.return_value.submit.return_value = mock_future
+
+        progress = MagicMock()
+        task = MagicMock()
+        result = execute_with_timeout(lambda: "test result", progress, task)
+        assert result is None
+
+
+
+
+def test_process_response_single_line():
+    with patch("c4f.main.console.print") as mock_print:
+        result = process_response("test message")
+        assert result == "test message"
+        mock_print.assert_called_once()
+
+
+def test_process_response_multi_line():
+    with patch("c4f.main.console.print") as mock_print:
+        result = process_response("first line\nsecond line")
+        assert result == "first line\nsecond line"
+        mock_print.assert_called_once()
+
+def test_handle_error_other():
+    with patch("c4f.main.console.print") as mock_print:
+        handle_error(Exception("Test error"))
+        mock_print.assert_called_once_with(
+            "[yellow]Error in model response, using fallback message: Test error[/yellow]")
+
+
+# Test for commit_changes function
+def test_commit_changes_success():
+    with patch("c4f.main.Progress") as mock_progress:
+        with patch("c4f.main.stage_files") as mock_stage:
+            with patch("c4f.main.do_commit") as mock_commit:
+                with patch("c4f.main.display_commit_result") as mock_display:
+                    mock_commit.return_value = ("Success", 0)
+                    commit_changes(["test.txt"], "test message")
+                    mock_stage.assert_called_once()
+                    mock_commit.assert_called_once()
+                    mock_display.assert_called_once()
+
+
+
+
+def test_display_commit_result_error():
+    with patch("c4f.main.console.print") as mock_print:
+        display_commit_result(("Error", 1), "test message")
+        mock_print.assert_called_once()
+
+# Test for generate_diff_summary function
+
+# Test for determine_prompt function
+def test_determine_prompt_simple():
+    config = MagicMock()
+    config.prompt_threshold = 50
+    result = determine_prompt("test text", [], 10, config)
+    assert "test text" in result
+    assert "conventional commit message" in result.lower()
+
+
+# Test for generate_simple_prompt function
+def test_generate_simple_prompt_with_brackets():
+    config = MagicMock()
+    config.force_brackets = True
+    result = generate_simple_prompt("test text", config)
+    assert "test text" in result
+    assert "Please use brackets" in result
+
+
+def test_generate_simple_prompt_without_brackets():
+    config = MagicMock()
+    config.force_brackets = False
+    result = generate_simple_prompt("test text", config)
+    assert "test text" in result
+    assert "Please use brackets" not in result
+
+
+# Test for generate_comprehensive_prompt function
+def test_generate_comprehensive_prompt_with_brackets():
+    config = MagicMock()
+    config.force_brackets = True
+    result = generate_comprehensive_prompt("test text", "test summary", config)
+    assert "test text" in result
+    assert "test summary" in result
+    assert "Please use brackets" in result
+
+
+def test_generate_comprehensive_prompt_without_brackets():
+    config = MagicMock()
+    config.force_brackets = False
+    result = generate_comprehensive_prompt("test text", "test summary", config)
+    assert "test text" in result
+    assert "test summary" in result
+    assert "Please use brackets" not in result
+
+
+# Test for handle_comprehensive_message with retry
+def test_handle_comprehensive_message_retry():
+    with patch("c4f.main.handle_short_comprehensive_message") as mock_handle:
+        mock_handle.return_value = "retry"
+        config = MagicMock()
+        config.min_comprehensive_length = 100
+        result = handle_comprehensive_message("short message", [], config)
+        assert result == "retry"
+
+
+# Test for handle_comprehensive_message with fallback
+def test_handle_comprehensive_message_fallback():
+    with patch("c4f.main.handle_short_comprehensive_message") as mock_handle:
+        mock_handle.return_value = "fallback"
+        config = MagicMock()
+        config.min_comprehensive_length = 100
+        changes = [
+            FileChange(status="M", path=Path("test.txt"), type="feat", diff="test diff", diff_lines=5, last_modified=0)
+        ]
+        result = handle_comprehensive_message("short message", changes, config)
+        assert result.startswith("feat: update")
+
+
+# Test for handle_short_comprehensive_message with empty input
+
+
+# Test for execute_with_timeout with custom timeout
+def test_execute_with_timeout_custom_timeout():
+    with patch("concurrent.futures.ThreadPoolExecutor") as mock_executor:
+        mock_future = MagicMock()
+        mock_future.result.return_value = "test result"
+        mock_executor.return_value.__enter__.return_value.submit.return_value = mock_future
+
+        progress = MagicMock()
+        task = MagicMock()
+        result = execute_with_timeout(lambda: "test result", progress, task, timeout=5)
+        assert result == "test result"
+
+
+# Test for execute_with_timeout with config timeout
+def test_execute_with_timeout_config_timeout():
+    with patch("concurrent.futures.ThreadPoolExecutor") as mock_executor:
+        mock_future = MagicMock()
+        mock_future.result.return_value = "test result"
+        mock_executor.return_value.__enter__.return_value.submit.return_value = mock_future
+
+        progress = MagicMock()
+        task = MagicMock()
+        config = MagicMock()
+        config.fallback_timeout = 15
+        result = execute_with_timeout(lambda: "test result", progress, task, "arg1", config)
+        assert result == "test result"
+
+
+
+
+# Test for main with config
+def test_main_with_config():
+    config = MagicMock()
+    with patch("c4f.main.handle_non_existent_git_repo"):
+        with patch("c4f.main.reset_staging"):
+            with patch("c4f.main.get_valid_changes", return_value=[]):
+                with patch("c4f.main.exit_with_no_changes") as mock_exit:
+                    main(config)
+                    mock_exit.assert_called_once()
+
+
+# Test for main without config
+def test_main_without_config():
+    with patch("c4f.main.handle_non_existent_git_repo"):
+        with patch("c4f.main.reset_staging"):
+            with patch("c4f.main.get_valid_changes", return_value=[]):
+                with patch("c4f.main.exit_with_no_changes") as mock_exit:
+                    with patch("c4f.config.default_config") as mock_config:
+                        main()
+                        mock_exit.assert_called_once()
+
+
+# Test for main with multiple change groups
+def test_main_multiple_groups():
+    changes1 = [FileChange(status="M", path=Path("test1.txt"), type="feat", diff="test", diff_lines=5, last_modified=0)]
+    changes2 = [FileChange(status="M", path=Path("test2.txt"), type="fix", diff="test", diff_lines=5, last_modified=0)]
+
+    with patch("c4f.main.handle_non_existent_git_repo"):
+        with patch("c4f.main.reset_staging"):
+            with patch("c4f.main.get_valid_changes", return_value=changes1 + changes2):
+                with patch("c4f.main.display_changes"):
+                    with patch("c4f.main.group_related_changes", return_value=[changes1, changes2]):
+                        with patch("c4f.main.process_change_group", side_effect=[False, True]):
+                            main()
+
+
+# Test for get_model_response with no choices
+def test_get_model_response_no_choices():
+    with patch("c4f.main.client.chat.completions.create") as mock_create:
+        mock_response = MagicMock()
+        mock_response.choices = []
+        mock_create.return_value = mock_response
+        config = MagicMock()
+        result = get_model_response("test prompt", {}, config)
+        assert result is None
+
+
+# Test for get_model_response with None response
+def test_get_model_response_none_response():
+    with patch("c4f.main.client.chat.completions.create") as mock_create:
+        mock_create.return_value = None
+        config = MagicMock()
+        result = get_model_response("test prompt", {}, config)
+        assert result is None
