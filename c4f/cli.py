@@ -23,15 +23,15 @@ import sys
 import warnings
 from pathlib import Path
 
+import g4f  # type: ignore
 from rich.panel import Panel
 from rich.text import Text
 
+from c4f.config import Config
 # Import main functionality here to avoid circular imports
 from c4f.main import main as run_main
-from c4f.config import Config
-import g4f # type: ignore
 
-__all__ = ["run_main"]
+__all__ = ["run_main", "parse_args"]
 
 
 # Define color codes for terminal output
@@ -537,9 +537,9 @@ def create_config_from_args(args: argparse.Namespace) -> Config:
         "gpt-4-mini": g4f.models.gpt_4o_mini,
         "gpt-4": g4f.models.gpt_4o,
     }
-    
+
     model = model_mapping.get(args.model, g4f.models.gpt_4o_mini)
-    
+
     return Config(
         force_brackets=args.force_brackets,
         fallback_timeout=args.timeout,

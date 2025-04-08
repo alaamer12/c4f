@@ -31,8 +31,8 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 
-from c4f.utils import console, client, SubprocessHandler, FileChange, SecureSubprocess
 from c4f.config import Config
+from c4f.utils import console, client, FileChange, SecureSubprocess
 
 __dir__ = ["main"]
 
@@ -48,10 +48,10 @@ def run_git_command(command: List[str], timeout: Optional[int] = None) -> Tuple[
         Tuple[str, str, int]: stdout, stderr, and return code.
     """
     handler = SecureSubprocess(
-            timeout=timeout,
-            allowed_commands={"git"},  # Allow git command
-            restricted_env=False  # Use full environment for git commands
-        )
+        timeout=timeout,
+        allowed_commands={"git"},  # Allow git command
+        restricted_env=False  # Use full environment for git commands
+    )
     return handler.run_command(command, timeout)
 
 
@@ -629,7 +629,8 @@ def purify_message(message: Optional[str]) -> Optional[str]:
     return message
 
 
-def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summary: str = "", config: Optional[Config] = None) -> Dict[str, Any]:
+def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summary: str = "",
+                         config: Optional[Config] = None) -> Dict[str, Any]:
     """Determine the appropriate tool calls based on the comprehensiveness of the change.
     
     Selects either a simple or comprehensive tool call based on the size of changes.
@@ -944,7 +945,7 @@ def execute_with_timeout(func, progress, task, *args, timeout=None):
     # Extract config from args if it's the last argument
     config = args[-1] if args and isinstance(args[-1], Config) else None
     timeout = timeout or (config.fallback_timeout if config else 10)
-    
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future = executor.submit(func, *args)
         try:
@@ -1204,7 +1205,7 @@ def main(config: Optional[Config] = None):
     if config is None:
         from c4f.config import default_config
         config = default_config
-        
+
     handle_non_existent_git_repo()
     reset_staging()
     changes = get_valid_changes()
@@ -1404,4 +1405,5 @@ def display_commit_preview(message):
 
 if __name__ == "__main__":
     from c4f.config import default_config
+
     main(default_config)

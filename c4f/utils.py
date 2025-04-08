@@ -1,3 +1,34 @@
+"""Utility functions and classes for the Commit For Free (c4f) application.
+
+This module provides core functionality for the c4f application, including:
+
+Classes:
+    - SubprocessHandler: Base class for handling subprocess execution
+    - SecureSubprocess: Enhanced version with security features
+    - FileChange: Data class for tracking file changes
+    
+Example:
+    To use the secure subprocess handler:
+
+    ```python
+    >>> from c4f.utils import SecureSubprocess
+
+    # Create a secure subprocess handler
+    >>> handler = SecureSubprocess(
+    >>>    timeout=30,
+    >>>    allowed_commands={"git"},
+    >>>    restricted_env=False
+    >>> )
+
+    # Run a command
+    >>> stdout, stderr, code = handler.run_command(["git", "status"])
+    ```
+
+Note:
+    This module requires psutil for resource monitoring features.
+    If psutil is not available, resource monitoring will be disabled.
+"""
+
 import logging
 import os
 import re
@@ -14,11 +45,12 @@ from rich.console import Console
 # Try to import psutil for cross-platform process management
 try:
     import psutil  # type: ignore
+
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
 
-__all__ = ["console", "client", "SubprocessHandler", "SecureSubprocess", "FileChange", "SecureSubprocessTermination"]
+__all__ = ["console", "client", "SubprocessHandler", "SecureSubprocess", "FileChange"]
 
 console = Console()
 
@@ -30,6 +62,7 @@ logger.setLevel(logging.INFO)
 
 # Type variable for subprocess.Popen
 T = TypeVar('T', str, bytes)
+
 
 @dataclass
 class FileChange:
@@ -81,9 +114,9 @@ class SubprocessHandler:
         env['PYTHONIOENCODING'] = 'utf-8'
         return env
 
-    def _execute_subprocess(self, command: List[str], popen_kwargs: Dict[str, Any], 
-                          timeout: Optional[int], is_text_mode: bool,
-                          encoding: str = 'utf-8', errors: str = 'replace') -> Tuple[str, str, int]:
+    def _execute_subprocess(self, command: List[str], popen_kwargs: Dict[str, Any],
+                            timeout: Optional[int], is_text_mode: bool,
+                            encoding: str = 'utf-8', errors: str = 'replace') -> Tuple[str, str, int]:
         """Execute a subprocess with the given parameters."""
         process = self._start_process(command, popen_kwargs)
         try:
@@ -101,14 +134,15 @@ class SubprocessHandler:
         """Start a subprocess with the given command and parameters."""
         return subprocess.Popen(command, **popen_kwargs)
 
-    def _communicate_with_process(self, process: subprocess.Popen[Any], 
-                                 timeout: Optional[int]) -> Tuple[Union[str, bytes], Union[str, bytes]]:
+    def _communicate_with_process(self, process: subprocess.Popen[Any],
+                                  timeout: Optional[int]) -> Tuple[Union[str, bytes], Union[str, bytes]]:
         """Communicate with the process and get its output."""
         return process.communicate(timeout=timeout or self.timeout)
 
     @staticmethod
     def _process_output(stdout: Union[str, bytes], stderr: Union[str, bytes],
-                        is_text_mode: bool, encoding: str, errors: str, process: subprocess.Popen[Any]) -> Tuple[str, str, int]:
+                        is_text_mode: bool, encoding: str, errors: str, process: subprocess.Popen[Any]) -> Tuple[
+        str, str, int]:
         """Process and decode the subprocess output.
         
         Args:
@@ -127,25 +161,21 @@ class SubprocessHandler:
             stderr = stderr.decode(encoding, errors=errors)
         return str(stdout), str(stderr), int(process.returncode)
 
-    def _handle_timeout(self, process: Optional[subprocess.Popen[Any]], command: List[str], timeout: Optional[int]) -> None:
+    def _handle_timeout(self, process: Optional[subprocess.Popen[Any]], command: List[str],
+                        timeout: Optional[int]) -> None:
         """Handle a timeout scenario."""
         self._terminate_process(process)
         raise TimeoutError(f"Command timed out after {timeout or self.timeout} seconds: {' '.join(command)}")
 
-    def _handle_execution_error(self, process: Optional[subprocess.Popen[Any]], error: Exception,) -> None:
+    def _handle_execution_error(self, process: Optional[subprocess.Popen[Any]], error: Exception, ) -> None:
         """Handle execution errors."""
         console.print(f"[red]Error in subprocess execution: {str(error)}[/red]")
         self._terminate_process(process)
+        raise error  # Re-raise the original exception after cleanup
 
     def run_text_mode(self, command: List[str], encoding: str = 'utf-8',
                       errors: str = 'replace', timeout: Optional[int] = None) -> Tuple[str, str, int]:
         """Run subprocess in text mode with specified encoding.
-
-        Args:
-            command: Command to execute as a list of strings.
-            encoding: Character encoding to use.
-            errors: How to handle encoding/decoding errors.
-            timeout: Maximum time in seconds to wait for the process to complete.
 
         Returns:
             Tuple[str, str, int]: stdout, stderr, and return code.
@@ -167,13 +197,6 @@ class SubprocessHandler:
     def run_binary_mode(self, command: List[str], encoding: str = 'utf-8',
                         errors: str = 'replace', timeout: Optional[int] = None) -> Tuple[str, str, int]:
         """Run subprocess in binary mode with manual decoding.
-
-        Args:
-            command: Command to execute as a list of strings.
-            encoding: Character encoding to use for decoding.
-            errors: How to handle encoding/decoding errors.
-            timeout: Maximum time in seconds to wait for the process to complete.
-
         Returns:
             Tuple[str, str, int]: decoded stdout, stderr, and return code.
 
@@ -185,7 +208,8 @@ class SubprocessHandler:
             'stderr': subprocess.PIPE,
             'env': self.create_env()
         }
-        return self._execute_subprocess(command, popen_kwargs, timeout, is_text_mode=False, encoding=encoding, errors=errors)
+        return self._execute_subprocess(command, popen_kwargs, timeout, is_text_mode=False, encoding=encoding,
+                                        errors=errors)
 
     def run_command(self, command: List[str], timeout: Optional[int] = None) -> Tuple[str, str, int]:
         """Execute a command and return its output.
@@ -265,15 +289,6 @@ class ProcessResourceMonitor:
                  memory_limit: Optional[int],
                  monitor_interval: float,
                  terminate_callback: Callable) -> None:
-        """Initialize the process resource monitor.
-
-        Args:
-            process: The subprocess.Popen object to monitor.
-            cpu_limit: Maximum CPU usage percentage allowed.
-            memory_limit: Maximum memory usage in bytes allowed.
-            monitor_interval: Time interval between resource checks in seconds.
-            terminate_callback: Function to call when resource limits are exceeded.
-        """
         self.process = process
         self.cpu_limit = cpu_limit
         self.memory_limit = memory_limit
@@ -381,9 +396,10 @@ class ProcessResourceMonitor:
                 return True
         return False
 
+
 class SecureSubprocessTermination:
     """Class responsible for safely terminating processes and their child processes."""
-    
+
     def __init__(self, termination_wait: float = 0.5) -> None:
         """Initialize the termination handler.
         
@@ -391,7 +407,7 @@ class SecureSubprocessTermination:
             termination_wait: Time to wait between termination attempts in seconds.
         """
         self.termination_wait = termination_wait
-    
+
     def terminate_process_and_children(self, proc: "psutil.Process") -> None:
         """Terminate a process and all its children.
         
@@ -400,7 +416,7 @@ class SecureSubprocessTermination:
         """
         if not PSUTIL_AVAILABLE:
             return
-            
+
         try:
             children = self._get_child_processes(proc)
             self._terminate_children(children)
@@ -411,19 +427,12 @@ class SecureSubprocessTermination:
             pass
         except Exception as e:
             logger.error(f"Error terminating process tree: {str(e)}")
-    
+
     @staticmethod
     def _get_child_processes(proc: "psutil.Process") -> List["psutil.Process"]:
-        """Get all child processes recursively.
-        
-        Args:
-            proc: The parent psutil.Process object.
-            
-        Returns:
-            List of child processes.
-        """
+        """Get all child processes recursively."""
         return proc.children(recursive=True)
-    
+
     @staticmethod
     def _terminate_children(children: List["psutil.Process"]) -> None:
         """Terminate all child processes."""
@@ -432,14 +441,14 @@ class SecureSubprocessTermination:
                 child.terminate()
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
-    
+
     @staticmethod
     def _terminate_parent(proc: "psutil.Process") -> None:
         """Terminate the parent process."""
         proc.terminate()
-    
-    def _handle_remaining_processes(self, proc: "psutil.Process", 
-                                   children: List["psutil.Process"]) -> None:
+
+    def _handle_remaining_processes(self, proc: "psutil.Process",
+                                    children: List["psutil.Process"]) -> None:
         """Wait for processes to terminate and kill any remaining ones.
         
         Args:
@@ -448,7 +457,7 @@ class SecureSubprocessTermination:
         """
         gone, still_alive = psutil.wait_procs([proc] + children, timeout=self.termination_wait)
         self._kill_remaining_processes(still_alive)
-    
+
     @staticmethod
     def _kill_remaining_processes(processes: List["psutil.Process"]) -> None:
         """Forcefully kill processes that didn't terminate gracefully."""
@@ -457,9 +466,9 @@ class SecureSubprocessTermination:
                 p.kill()
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
-    
-    def terminate_process(self, process: Optional[subprocess.Popen[Any]], 
-                          max_termination_retries: int = 3, 
+
+    def terminate_process(self, process: subprocess.Popen[Any],
+                          max_termination_retries: int = 3,
                           termination_wait: Optional[float] = None) -> None:
         """Terminate a process with multiple attempts if needed.
         
@@ -470,40 +479,82 @@ class SecureSubprocessTermination:
             max_termination_retries: Maximum number of attempts to terminate a process.
             termination_wait: Time to wait between termination attempts in seconds.
         """
-        if process is None or process.poll() is not None:
+        if self._is_process_already_terminated(process):
             return
-            
-        if PSUTIL_AVAILABLE and process.pid is not None:
-            # Use psutil for better process termination
-            try:
-                p = psutil.Process(process.pid)
-                self.terminate_process_and_children(p)
-                return
-            except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError):
-                # Fall back to standard termination
-                pass
-            except Exception as e:
-                logger.error(f"Error during psutil termination: {str(e)}")
-        
+
+        if self._try_psutil_termination(process):
+            return
+
         # Fall back to standard termination if psutil failed or is unavailable
-        wait_time = termination_wait or self.termination_wait
+        self._perform_standard_termination(process, max_termination_retries, termination_wait)
+
+    @staticmethod
+    def _is_process_already_terminated(process: Optional[subprocess.Popen[Any]]) -> bool:
+        """Check if the process is None or already terminated."""
+        return process is None or process.poll() is not None
+
+    def _try_psutil_termination(self, process: subprocess.Popen[Any]) -> bool:
+        """Attempt to terminate the process using psutil if available.
         
-        # Try to terminate the process gracefully
+        Args:
+            process: The subprocess.Popen object to terminate.
+            
+        Returns:
+            bool: True if psutil termination was successful, False otherwise.
+        """
+        if not (PSUTIL_AVAILABLE and process.pid is not None):
+            return False
+
         try:
-            process.terminate()
+            p = psutil.Process(process.pid)
+            self.terminate_process_and_children(p)
+            return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, ProcessLookupError):
+            # Fall back to standard termination
+            return False
+        except Exception as e:
+            logger.error(f"Error during psutil termination: {str(e)}")
+            return False
 
-            # Wait for the process to terminate
-            for _ in range(max_termination_retries):
-                if process.poll() is not None:
-                    return
-                time.sleep(wait_time)
+    def _perform_standard_termination(self, process: subprocess.Popen[Any],
+                                      max_termination_retries: int,
+                                      termination_wait: Optional[float]) -> None:
+        """Perform standard process termination with retries.
+        
+        Args:
+            process: The subprocess.Popen object to terminate.
+            max_termination_retries: Maximum number of attempts to terminate a process.
+            termination_wait: Time to wait between termination attempts in seconds.
+        """
+        wait_time = termination_wait or self.termination_wait
 
-            # If still running, kill it forcefully
-            if process.poll() is None:
-                process.kill()
+        try:
+            self._terminate_and_wait(process, max_termination_retries, wait_time)
         except OSError:
             # Process might already be gone
             pass
+
+    @staticmethod
+    def _terminate_and_wait(process: subprocess.Popen[Any],
+                            max_retries: int, wait_time: float) -> None:
+        """Terminate a process and wait for it to exit, with force kill if needed.
+        
+        Args:
+            process: The subprocess.Popen object to terminate.
+            max_retries: Maximum number of attempts to terminate a process.
+            wait_time: Time to wait between termination attempts in seconds.
+        """
+        process.terminate()
+
+        # Wait for the process to terminate
+        for _ in range(max_retries):
+            if process.poll() is not None:
+                return
+            time.sleep(wait_time)
+
+        # If still running, kill it forcefully
+        if process.poll() is None:
+            process.kill()
 
 
 class SecureSubprocess(SubprocessHandler):
@@ -530,21 +581,7 @@ class SecureSubprocess(SubprocessHandler):
                  enable_shell: bool = False,
                  restricted_env: bool = True,
                  monitor_interval: float = 0.5) -> None:
-        """Initialize the SecureSubprocess with security settings.
 
-        Args:
-            timeout: Maximum time in seconds to wait for a process to complete.
-            max_termination_retries: Maximum number of attempts to terminate a process.
-            termination_wait: Time to wait between termination attempts in seconds.
-            allowed_commands: Set of allowed command names (without arguments).
-            working_dir: Working directory for subprocess execution.
-            max_output_size: Maximum size of output in bytes before truncating.
-            cpu_limit: Maximum CPU percentage the process can use (0-100).
-            memory_limit: Maximum memory in bytes the process can use.
-            enable_shell: Whether to enable shell interpretation (increases security risks).
-            restricted_env: Whether to use a restricted set of environment variables.
-            monitor_interval: How often to check resource usage (in seconds).
-        """
         super().__init__(timeout, max_termination_retries, termination_wait)
         self.allowed_commands: Set[str] = allowed_commands or set()
         self.working_dir: Optional[Path] = Path(working_dir) if working_dir else None
@@ -554,18 +591,18 @@ class SecureSubprocess(SubprocessHandler):
         self.enable_shell: bool = enable_shell
         self.restricted_env: bool = restricted_env
         self.monitor_interval: float = monitor_interval
-        
+
         # Create a termination handler
         self.termination_handler = SecureSubprocessTermination(termination_wait or self.termination_wait)
-        
+
         # Validate working directory if provided
         if self.working_dir and not self.working_dir.exists():
             raise ValueError(f"Working directory does not exist: {self.working_dir}")
-            
+
         # Warn if psutil is not available but resource limits are specified
         if not PSUTIL_AVAILABLE and (cpu_limit is not None or memory_limit is not None):
             logger.warning("Resource limiting requires psutil, but it's not installed. "
-                          "Install it with: pip install psutil")
+                           "Install it with: pip install psutil")
 
     def create_env(self, restricted: bool = True) -> Dict[str, str]:
         """Create environment with explicit encoding settings for subprocess.
@@ -578,27 +615,16 @@ class SecureSubprocess(SubprocessHandler):
         """
         if restricted:
             # Create a minimal environment with only essential variables
-            env = {}
+            env = self._get_env()
             # Add only essential paths and variables
-            env['PATH'] = os.environ.get('PATH', '')
-            env['PYTHONIOENCODING'] = 'utf-8'
-            env['LANG'] = os.environ.get('LANG', 'en_US.UTF-8')
-            env['LC_ALL'] = os.environ.get('LC_ALL', 'en_US.UTF-8')
-            
+
             # Add system-specific environment variables
-            if sys.platform == "win32":
-                env.update({
-                    'SYSTEMROOT': os.environ.get('SYSTEMROOT', 'C:\\Windows'),
-                    'TEMP': os.environ.get('TEMP', ''),
-                    'TMP': os.environ.get('TMP', ''),
-                    'PATHEXT': os.environ.get('PATHEXT', '.COM;.EXE;.BAT;.CMD'),
-                    'COMSPEC': os.environ.get('COMSPEC', 'C:\\Windows\\system32\\cmd.exe'),
-                })
+            self._handle_win32_env(env)
         else:
             # Use full environment but still set encoding
             env = os.environ.copy()
             env['PYTHONIOENCODING'] = 'utf-8'
-            
+
         return env
 
     @staticmethod
@@ -611,11 +637,11 @@ class SecureSubprocess(SubprocessHandler):
             Dict[str, str]: Dictionary of essential environment variables.
         """
         return {
-                'PATH': os.environ.get('PATH', ''),
-                'PYTHONIOENCODING': 'utf-8',
-                'LANG': os.environ.get('LANG', 'en_US.UTF-8'),
-                'LC_ALL': os.environ.get('LC_ALL', 'en_US.UTF-8'),
-            }
+            'PATH': os.environ.get('PATH', ''),
+            'PYTHONIOENCODING': 'utf-8',
+            'LANG': os.environ.get('LANG', 'en_US.UTF-8'),
+            'LC_ALL': os.environ.get('LC_ALL', 'en_US.UTF-8'),
+        }
 
     @staticmethod
     def _handle_win32_env(env: Dict[str, str]) -> None:
@@ -646,19 +672,19 @@ class SecureSubprocess(SubprocessHandler):
         """
         if not command:
             return False
-            
+
         # Extract the base command without arguments
         base_cmd = os.path.basename(command[0])
-        
+
         # On Windows, executables often have extensions (.exe, .bat, etc.)
         if sys.platform == "win32":
             # Remove the extension for command validation
             base_cmd = os.path.splitext(base_cmd)[0]
-            
+
         # If allowed_commands is empty, all commands are allowed
         if not self.allowed_commands:
             return True
-            
+
         # Check if the base command is in the allowed list
         return base_cmd in self.allowed_commands
 
@@ -674,10 +700,10 @@ class SecureSubprocess(SubprocessHandler):
         """
         if not command:
             return []
-            
+
         # Keep the first element (command) as is
         sanitized = [command[0]]
-        
+
         # Sanitize each argument using platform-specific approach
         for arg in command[1:]:
             if sys.platform == "win32":
@@ -687,9 +713,9 @@ class SecureSubprocess(SubprocessHandler):
             else:
                 # Unix-like sanitization
                 sanitized_arg = re.sub(r'[;&|`$<>]', '', arg)
-                
+
             sanitized.append(sanitized_arg)
-            
+
         return sanitized
 
     def _start_resource_monitoring(self, process: subprocess.Popen[Any]) -> None:
@@ -717,56 +743,45 @@ class SecureSubprocess(SubprocessHandler):
     def _terminate_process_and_children(self, proc: "psutil.Process") -> None:
         """Delegate to termination handler."""
         self.termination_handler.terminate_process_and_children(proc)
-    
+
     def _terminate_process(self, process: Optional[subprocess.Popen[Any]]) -> None:
         """Delegate to termination handler."""
         self.termination_handler.terminate_process(
-            process, 
+            process,  # type: ignore
             max_termination_retries=self.max_termination_retries,
             termination_wait=self.termination_wait
         )
 
     def _run_secure_subprocess(self, command: List[str], is_text_mode: bool,
-                             encoding: str = 'utf-8', errors: str = 'replace',
-                             timeout: Optional[int] = None) -> Tuple[str, str, int]:
+                               encoding: str = 'utf-8', errors: str = 'replace',
+                               timeout: Optional[int] = None) -> Tuple[str, str, int]:
         """Common secure subprocess execution logic for both text and binary modes.
-
-        Args:
-            command: Command to execute as a list of strings.
-            is_text_mode: Whether to run in text mode or binary mode.
-            encoding: Character encoding to use.
-            errors: How to handle encoding/decoding errors.
-            timeout: Maximum time in seconds to wait for the process to complete.
 
         Returns:
             Tuple[str, str, int]: stdout, stderr, and return code.
-
-        Raises:
-            TimeoutError: If the process exceeds the specified timeout.
-            ValueError: If the command is not allowed.
         """
         # Validate and prepare command
         sanitized_command = self._prepare_command(command)
-        
+
         # Prepare Popen arguments based on mode
-        popen_kwargs = (self._prepare_text_mode_kwargs(encoding, errors) if is_text_mode 
-                       else self._prepare_binary_mode_kwargs())
-        
-        return self._execute_subprocess(sanitized_command, popen_kwargs, timeout, 
-                                     is_text_mode=is_text_mode, encoding=encoding, errors=errors)
+        popen_kwargs = (self._prepare_text_mode_kwargs(encoding, errors) if is_text_mode
+                        else self._prepare_binary_mode_kwargs())
+
+        return self._execute_subprocess(sanitized_command, popen_kwargs, timeout,
+                                        is_text_mode=is_text_mode, encoding=encoding, errors=errors)
 
     def run_text_mode(self, command: List[str], encoding: str = 'utf-8',
-                      errors: str = 'replace', timeout: Optional[int] = None) -> Tuple[str, str, int]:
+                        errors: str = 'replace', timeout: Optional[int] = None) -> Tuple[str, str, int]:
         """Run subprocess in text mode with specified encoding and security measures."""
-        return self._run_secure_subprocess(command, is_text_mode=True, 
-                                         encoding=encoding, errors=errors, timeout=timeout)
-    
+        return self._run_secure_subprocess(command, is_text_mode=True,
+                                            encoding=encoding, errors=errors, timeout=timeout)
+
     def run_binary_mode(self, command: List[str], encoding: str = 'utf-8',
                         errors: str = 'replace', timeout: Optional[int] = None) -> Tuple[str, str, int]:
         """Run subprocess in binary mode with manual decoding and security measures."""
         return self._run_secure_subprocess(command, is_text_mode=False,
-                                         encoding=encoding, errors=errors, timeout=timeout)
-    
+                                            encoding=encoding, errors=errors, timeout=timeout)
+
     def _prepare_command(self, command: List[str]) -> List[str]:
         """Validate and sanitize the command.
         
@@ -781,14 +796,14 @@ class SecureSubprocess(SubprocessHandler):
         """
         if not self.validate_command(command):
             raise ValueError(f"Command not allowed: {command[0]}")
-            
+
         sanitized_command = self.sanitize_command(command)
-        
+
         # Log command execution for audit purposes
         logger.info(f"Executing command: {' '.join(sanitized_command)}")
-        
+
         return sanitized_command
-    
+
     def _prepare_text_mode_kwargs(self, encoding: str, errors: str) -> Dict[str, Any]:
         """Prepare kwargs for text mode subprocess.
         
@@ -800,7 +815,7 @@ class SecureSubprocess(SubprocessHandler):
             Dict[str, Any]: Keyword arguments for subprocess.Popen.
         """
         env = self.create_env(restricted=self.restricted_env)
-        
+
         popen_kwargs: Dict[str, Any] = {
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,
@@ -810,10 +825,10 @@ class SecureSubprocess(SubprocessHandler):
             "env": env,
             "universal_newlines": True,
         }
-        
+
         self._add_optional_popen_args(popen_kwargs)
         return popen_kwargs
-    
+
     def _prepare_binary_mode_kwargs(self) -> Dict[str, Any]:
         """Prepare kwargs for binary mode subprocess.
         
@@ -821,16 +836,16 @@ class SecureSubprocess(SubprocessHandler):
             Dict[str, Any]: Keyword arguments for subprocess.Popen.
         """
         env = self.create_env(restricted=self.restricted_env)
-        
+
         popen_kwargs: Dict[str, Any] = {
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE,
             "env": env,
         }
-        
+
         self._add_optional_popen_args(popen_kwargs)
         return popen_kwargs
-    
+
     def _add_optional_popen_args(self, popen_kwargs: Dict[str, Any]) -> None:
         """Add optional arguments to Popen kwargs if they have values.
         
@@ -839,11 +854,10 @@ class SecureSubprocess(SubprocessHandler):
         """
         if self.working_dir:
             popen_kwargs["cwd"] = self.working_dir
-            
+
         if self.enable_shell:
             popen_kwargs["shell"] = True
 
-    
     def _truncate_output(self, output: Union[str, bytes]) -> Union[str, bytes]:
         """Truncate output if it exceeds the maximum size.
         
@@ -860,10 +874,10 @@ class SecureSubprocess(SubprocessHandler):
             if len(output) > self.max_output_size:
                 return output[:self.max_output_size] + b"... (truncated)"
         return output
-    
-    def _execute_subprocess(self, command: List[str], popen_kwargs: Dict[str, Any], 
-                           timeout: Optional[int], is_text_mode: bool,
-                           encoding: str = 'utf-8', errors: str = 'replace') -> Tuple[str, str, int]:
+
+    def _execute_subprocess(self, command: List[str], popen_kwargs: Dict[str, Any],
+                            timeout: Optional[int], is_text_mode: bool,
+                            encoding: str = 'utf-8', errors: str = 'replace') -> Tuple[str, str, int]:
         """Execute the subprocess with the given parameters.
         
         Args:
@@ -881,15 +895,16 @@ class SecureSubprocess(SubprocessHandler):
             TimeoutError: If the process exceeds the specified timeout.
         """
         process = None
-        
+
         try:
             process = self._start_process(command, popen_kwargs)
             stdout, stderr = self._communicate_with_process(process, timeout)
-            processed_stdout, processed_stderr, returncode = self._process_output(stdout, stderr, is_text_mode, encoding, errors, process)
-            
+            processed_stdout, processed_stderr, returncode = self._process_output(stdout, stderr, is_text_mode,
+                                                                                  encoding, errors, process)
+
             # Log completion
             logger.info(f"Command completed with return code: {returncode}")
-            
+
             return processed_stdout, processed_stderr, returncode
         except subprocess.TimeoutExpired:
             self._handle_timeout(process, command, timeout)
@@ -897,7 +912,7 @@ class SecureSubprocess(SubprocessHandler):
             self._handle_execution_error(process, e)
         finally:
             self._cleanup_process(process)
-    
+
     def _start_process(self, command: List[str], popen_kwargs: Dict[str, Any]) -> subprocess.Popen[Any]:
         """Start a subprocess with the given command and parameters.
         
@@ -911,31 +926,15 @@ class SecureSubprocess(SubprocessHandler):
         process = subprocess.Popen(command, **popen_kwargs)
         self._start_resource_monitoring(process)
         return process
-    
-    def _communicate_with_process(self, process: subprocess.Popen[Any], 
-                                 timeout: Optional[int]) -> Tuple[Union[str, bytes], Union[str, bytes]]:
-        """Communicate with the process and get its output.
-        
-        Args:
-            process: The subprocess.Popen object.
-            timeout: Maximum time in seconds to wait for the process to complete.
-            
-        Returns:
-            Tuple[Union[str, bytes], Union[str, bytes]]: stdout and stderr from the process.
-            
-        Raises:
-            subprocess.TimeoutExpired: If the process exceeds the specified timeout.
-        """
+
+    def _communicate_with_process(self, process: subprocess.Popen[Any],
+                                  timeout: Optional[int]) -> Tuple[Union[str, bytes], Union[str, bytes]]:
+        """Communicate with the process and get its output."""
         return process.communicate(timeout=timeout or self.timeout)
-    
-    def _handle_timeout(self, process: Optional[subprocess.Popen[Any]], 
-                       command: List[str], timeout: Optional[int]) -> NoReturn:
+
+    def _handle_timeout(self, process: Optional[subprocess.Popen[Any]],
+                        command: List[str], timeout: Optional[int]) -> NoReturn:
         """Handle a subprocess timeout.
-        
-        Args:
-            process: The subprocess.Popen object that timed out.
-            command: The command that was being executed.
-            timeout: The timeout that was exceeded.
             
         Raises:
             TimeoutError: Always raised to indicate the timeout.
@@ -943,21 +942,12 @@ class SecureSubprocess(SubprocessHandler):
         self._terminate_process(process)
         logger.warning(f"Command timed out: {' '.join(command)}")
         raise TimeoutError(f"Command timed out after {timeout or self.timeout} seconds: {' '.join(command)}")
-    
-    def _handle_execution_error(self, process: Optional[subprocess.Popen[Any]], error: Exception) -> NoReturn:
-        """Handle an error during subprocess execution.
-        
-        Args:
-            process: The subprocess.Popen object.
-            error: The exception that occurred.
-            
-        Raises:
-            Exception: Re-raises the original exception after cleanup.
-        """
-        logger.error(f"Error in subprocess execution: {str(error)}")
+
+    def _handle_execution_error(self, process: Optional[subprocess.Popen[Any]], error: Exception, ) -> None:
+        """Handle execution errors."""
         console.print(f"[red]Error in subprocess execution: {str(error)}[/red]")
         self._terminate_process(process)
-        raise
+        raise error  # Re-raise the original exception after cleanup
 
     def _process_output(self, stdout: Union[str, bytes], stderr: Union[str, bytes],  # type: ignore
                         is_text_mode: bool, encoding: str, errors: str,
