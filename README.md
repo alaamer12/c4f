@@ -5,6 +5,8 @@
 
 A sophisticated Git commit message generator that uses AI to create meaningful, conventional commit messages based on your code changes.
 
+> **Note:** While the GitHub repository is named `c4f`, the package is published on PyPI as `commit-for-free` since the name `c4f` was already taken. All installation commands should use `commit-for-free` as the package name.
+
 ![Simple GIF showcase an introduction about C4f](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/intro.gif "Intro Animation")
 
 <div>
@@ -35,7 +37,7 @@ A sophisticated Git commit message generator that uses AI to create meaningful, 
 
 See C4F in action:
 
-![Commit generation demo](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/commits.gif)
+![Commit generation demo](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/commits.gif "Commit Generation Demo")
 
 > **Note:** It's normal to occasionally see model response timeouts as shown in the demo. This is due to limitations of the free GPT models provided by `g4f`. After all configured attempts, the package automatically creates a fallback commit message to ensure you can always complete your workflow.
 
