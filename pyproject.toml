@@ -97,6 +97,8 @@ monitoring = ["psutil"]  # Optional dependency for process monitoring and system
 pytest = "^8.3.5"
 coverage = "^7.7.1"
 mypy = "^1.15.0"
+ruff = "^0.11.5"
+
 
 [build-system]
 requires = ["poetry-core"]
@@ -141,3 +143,76 @@ exclude_lines = [
 ignore_errors = true
 fail_under = 85 # Set minimum coverage percentage
 show_missing = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+indent-width = 4
+exclude = ["tests/*", "scripts/*"]  # Exclude all files in tests directory
+
+
+[tool.ruff.lint]
+extend-select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "ANN",  # flake8-annotations
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "DTZ",  # flake8-datetimez
+    "T10",  # flake8-debugger
+    "EM",   # flake8-errmsg
+    "ISC",  # flake8-implicit-str-concat
+    "ICN",  # flake8-import-conventions
+    "G",    # flake8-logging-format
+    "INP",  # flake8-no-pep420
+    "PIE",  # flake8-pie
+    "T20",  # flake8-print
+    "PYI",  # flake8-pyi
+    "PT",   # flake8-pytest-style
+    "Q",    # flake8-quotes
+    "RSE",  # flake8-raise
+    "RET",  # flake8-return
+    "SLF",  # flake8-self
+    "SIM",  # flake8-simplify
+    "ARG",  # flake8-unused-arguments
+    "PTH",  # flake8-use-pathlib
+    "TD",   # flake8-todos
+    "FIX",  # flake8-fix-me
+    "ERA",  # eradicate
+    "PD",   # pandas-vet
+    "PGH",  # pygrep-hooks
+    "PL",   # pylint
+    "TRY",  # tryceratops
+    "NPY",  # numpy
+    "RUF",  # ruff-specific
+]
+
+ignore = [
+    "E501",    # line too long - handled by formatter
+    "UP007",   # optional-type-checking-imports
+    "PGH003",  # specific-string-type-hints
+    "G004",    # string-type-hint-for-literal-string
+    "UP006",   #
+    "UP035",   #
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "ANN",  # flake8-annotations
+    "S101",  # assert
+]
+"benchmark/**/*.py" = [
+    "T20",  # flake8-print
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["jsdfile"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
