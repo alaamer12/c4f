@@ -912,6 +912,7 @@ class SecureSubprocess(SubprocessHandler):
             self._handle_execution_error(process, e)
         finally:
             self._cleanup_process(process)
+        return "", "", 1
 
     def _start_process(self, command: List[str], popen_kwargs: Dict[str, Any]) -> subprocess.Popen[Any]:
         """Start a subprocess with the given command and parameters.
