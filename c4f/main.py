@@ -15,57 +15,81 @@ Example:
     commit messages based on the file changes.
 """
 
+from __future__ import annotations
+
 import concurrent.futures
 import os
 import re
 import sys
 from collections import defaultdict
-from concurrent.futures import TimeoutError
-from datetime import datetime
+from collections.abc import Callable
+from concurrent.futures import TimeoutError  # noqa: A004
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import List, Tuple, Optional, Union, Literal, Dict, Any, Callable
+from typing import Any, Dict, List, NoReturn, Optional, Tuple, TypeVar, cast
 
-import g4f  # type: ignore
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TaskProgressColumn,
+    TextColumn,
+)
 from rich.table import Table
 
 from c4f.config import Config
-from c4f.utils import console, client, FileChange, SecureSubprocess
+from c4f.utils import (  # type: ignore
+    STATUS_TYPE,
+    FileChange,
+    SecureSubprocess,
+    SubprocessConfig,
+    client,
+    console,
+)
 
 __dir__ = ["main"]
 
+T = TypeVar("T")
 
-def run_git_command(command: List[str], timeout: Optional[int] = None) -> Tuple[str, str, int]:
+GREEN_FORMAT_THRESHOLD = 10
+YELLOW_FORMAT_THRESHOLD = 50
+
+
+def run_git_command(
+    command: list[str], timeout: int | None = None
+) -> tuple[str, str, int]:
     """Run a git command and return its output.
-    
+
     Args:
         command: The git command to run as a list of strings.
         timeout: Maximum time in seconds to wait for the process to complete.
-        
+
     Returns:
         Tuple[str, str, int]: stdout, stderr, and return code.
     """
-    handler = SecureSubprocess(
+    config = SubprocessConfig(
         timeout=timeout,
         allowed_commands={"git"},  # Allow git command
-        restricted_env=False  # Use full environment for git commands
+        restricted_env=False,  # Use full environment for git commands
     )
+    handler = SecureSubprocess(config)
     return handler.run_command(command, timeout)
 
 
 def get_root_git_workspace() -> Path:
     """Get the root directory of the current workspace.
-    
+
     Returns the directory containing this file.
     """
     return Path(__file__).parent
 
 
-def get_git_status_output() -> Tuple[str, str, int]:
+def get_git_status_output() -> tuple[str, str, int]:
     """Get the raw output from git status command.
-    
+
     Returns:
         Tuple[str, str, int]: stdout, stderr, and return code from git status command.
     """
@@ -74,23 +98,25 @@ def get_git_status_output() -> Tuple[str, str, int]:
 
 def handle_git_status_error(stderr: str) -> None:
     """Handle error from git status command.
-    
+
     Args:
         stderr: Error output from git status command.
-    
+
     Exits the program if the git status command fails.
     """
     console.print(f"[red]Error getting git status:[/red] {stderr}", style="bold red")
     sys.exit(1)
 
 
-def process_untracked_file(status: str, file_path: str) -> List[Tuple[str, str]]:
+def process_untracked_file(
+    status: STATUS_TYPE, file_path: str
+) -> List[Tuple[STATUS_TYPE, str]]:
     """Process untracked files and directories.
-    
+
     Args:
         status: Git status code.
         file_path: Path to the file or directory.
-        
+
     Returns:
         List of tuples containing status and file path.
     """
@@ -103,27 +129,27 @@ def process_untracked_file(status: str, file_path: str) -> List[Tuple[str, str]]
             changes.append((status, str(file)))
     else:
         changes.append((status, file_path))
-    return changes
+    return changes  # type: ignore
 
 
 def process_renamed_file(file_path: str) -> str:
     """Process renamed files to extract the new file path.
-    
+
     Args:
         file_path: Original file path string containing the rename information.
-        
+
     Returns:
         The new file path after rename.
     """
     return file_path.split(" -> ")[1]
 
 
-def process_git_status_line(line: str) -> List[Tuple[str, str]]:
+def process_git_status_line(line: str) -> List[tuple[STATUS_TYPE, str]]:
     """Process a single line from git status output.
-    
+
     Args:
         line: A line from git status --porcelain output.
-        
+
     Returns:
         List of tuples containing status and file path.
     """
@@ -134,23 +160,22 @@ def process_git_status_line(line: str) -> List[Tuple[str, str]]:
 
     # Handle untracked files (marked as '??')
     if status == "??":
-        return process_untracked_file(status, file_path)
+        return process_untracked_file(cast(STATUS_TYPE, status), file_path)
     # Handle renamed files
-    elif status == "R":
+    if status == "R":
         file_path = process_renamed_file(file_path)
-        return [(status, file_path)]
+        return [(status, file_path)]  # type: ignore
     # Handle regular changes
-    else:
-        return [(status, file_path)]
+    return [(status, file_path)]  # type: ignore
 
 
-def parse_git_status() -> List[Tuple[str, str]]:
+def parse_git_status() -> List[Tuple[STATUS_TYPE, str]]:
     """Parse the output of 'git status --porcelain' to get file changes.
-    
+
     Retrieves and processes git status output to identify changed files.
     Exits the program if the git status command fails.
     Handles special cases like untracked and renamed files.
-    
+
     Returns:
         List of tuples containing status and file path.
     """
@@ -164,10 +189,10 @@ def parse_git_status() -> List[Tuple[str, str]]:
     return changes
 
 
-def list_untracked_files(directory: Path) -> List[Path]:
+def list_untracked_files(directory: Path) -> list[Path]:
     """Recursively list all files in an untracked directory."""
     files = []
-    for item in directory.glob('**/*'):
+    for item in directory.glob("**/*"):
         if item.is_file():
             files.append(item)
     return files
@@ -175,7 +200,7 @@ def list_untracked_files(directory: Path) -> List[Path]:
 
 def get_file_diff(file_path: str) -> str:
     """Get the diff for a file.
-    
+
     Handles different cases including directories and untracked files.
     """
     console.print(f"Getting diff for {file_path}...", style="blue")
@@ -192,27 +217,27 @@ def get_file_diff(file_path: str) -> str:
 
 def shorten_diff(diff: str, config: Config) -> str:
     """Shorten a diff to a maximum number of lines.
-    
+
     Truncates diffs that are longer than DIFF_MAX_LENGTH and adds an indicator.
-    
+
     Args:
         diff: The diff to shorten.
         config: Configuration object with settings for the commit message generator.
-        
+
     Returns:
         str: The shortened diff.
     """
     lines = diff.strip().splitlines()
 
     if len(lines) > config.diff_max_length:
-        lines = lines[:config.diff_max_length] + ["\n...\n\n"]
+        lines = lines[: config.diff_max_length] + ["\n...\n\n"]
 
     return "\n".join(lines)
 
 
 def get_tracked_file_diff(file_path: str) -> str:
     """Get the diff for a tracked file.
-    
+
     First tries to get the diff from staged changes, then from unstaged changes.
     Returns an empty string if no diff is available.
     """
@@ -236,7 +261,7 @@ def handle_directory(file_path: str) -> str:
 
 def is_untracked(file_path: str) -> bool:
     """Check if a file is untracked by git.
-    
+
     A file is untracked if git status returns '??' at the start of the line.
     """
     stdout, _, code = run_git_command(["git", "status", "--porcelain", file_path])
@@ -245,7 +270,7 @@ def is_untracked(file_path: str) -> bool:
 
 def handle_untracked_file(path: Path) -> str:
     """Handle untracked files by reading their content.
-    
+
     Returns appropriate messages for files that don't exist or can't be read.
     """
     if not path.exists():
@@ -257,19 +282,19 @@ def handle_untracked_file(path: Path) -> str:
         return read_file_content(path)
     except Exception as e:
         console.print(f"[red]Error reading file {path}:[/red] {e}", style="bold red")
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 def read_file_content(path: Path) -> str:
     """Read the content of a file, detecting binary files.
-    
+
     Checks for null bytes to determine if a file is binary.
     Returns the file content or a message indicating it's a binary file.
     """
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with Path(path).open("r", encoding="utf-8") as f:
             content = f.read(1024)
-            if '\0' in content:
+            if "\0" in content:
                 return f"Binary file: {path}"
             f.seek(0)
             return f.read()
@@ -279,7 +304,7 @@ def read_file_content(path: Path) -> str:
 
 def analyze_file_type(file_path: Path, diff: str) -> str:
     """Determine the type of change based on file path and diff content."""
-    file_type_checks: list[Callable[[Path, str], Optional[str]]] = [
+    file_type_checks: list[Callable[[Path, str], str | None]] = [
         check_python_file,
         check_documentation_file,
         check_configuration_file,
@@ -297,63 +322,78 @@ def analyze_file_type(file_path: Path, diff: str) -> str:
     return "feat"  # Default case if no other type matches
 
 
-def check_python_file(file_path: Path, _: str) -> Optional[str]:
+def check_python_file(file_path: Path, _: str) -> str | None:
     """Check if the file is a Python file and determine its type.
-    
+
     Python files with 'test' in their path are classified as test files.
     """
-    if file_path.suffix == '.py':
-        return 'test' if 'test' in str(file_path).lower() else 'feat'
+    if file_path.suffix == ".py":
+        return "test" if "test" in str(file_path).lower() else "feat"
     return None
 
 
-def check_documentation_file(file_path: Path, _: str) -> Optional[str]:
+def check_documentation_file(file_path: Path, _: str) -> str | None:
     """Check if the file is a documentation file.
-    
+
     Files with .md, .rst, or .txt extensions are classified as docs.
     """
-    if file_path.suffix in ['.md', '.rst', '.txt']:
-        return 'docs'
+    if file_path.suffix in [".md", ".rst", ".txt"]:
+        return "docs"
     return None
 
 
-def check_configuration_file(file_path: Path, _: str) -> Optional[str]:
+def check_configuration_file(file_path: Path, _: str) -> str | None:
     """Check if the file is a configuration file.
-    
+
     Common configuration files like .gitignore and requirements.txt are classified as chore.
     """
-    config_files = ['.gitignore', 'requirements.txt', 'setup.py', 'setup.cfg', 'pyproject.toml']
+    config_files = [
+        ".gitignore",
+        "requirements.txt",
+        "setup.py",
+        "setup.cfg",
+        "pyproject.toml",
+    ]
     if file_path.name in config_files:
-        return 'chore'
+        return "chore"
     return None
 
 
-def check_script_file(file_path: Path, _: str) -> Optional[str]:
+def check_script_file(file_path: Path, _: str) -> str | None:
     """Check if the file is in a scripts directory.
-    
+
     Files in directories named 'scripts' are classified as chore.
     """
-    return 'chore' if "scripts" in file_path.parts else None
+    return "chore" if "scripts" in file_path.parts else None
 
 
-def check_test_file(file_path: Path, _: str) -> Optional[str]:
-    return 'test' if is_test_file(file_path) else None
+def check_test_file(file_path: Path, _: str) -> str | None:
+    return "test" if is_test_file(file_path) else None
 
 
 def is_test_file(file_path: Path) -> bool:
     """Check if the file is in a dedicated test directory."""
-    test_indicators = ("tests", "test", "spec", "specs", "pytest", "unittest", "mocks", "fixtures")
+    test_indicators = (
+        "tests",
+        "test",
+        "spec",
+        "specs",
+        "pytest",
+        "unittest",
+        "mocks",
+        "fixtures",
+    )
     return any(part.lower() in test_indicators for part in file_path.parts)
 
 
-def check_file_path_patterns(file_path: Path, _: str) -> Optional[str]:
+def check_file_path_patterns(file_path: Path, _: str) -> str | None:
     """Check file name patterns to determine file type."""
     # Enhanced patterns based on conventional commits and industry standards
     type_patterns = get_test_patterns()
     return check_patterns(str(file_path), type_patterns)
 
 
-def check_diff_patterns(diff: Path, _: str) -> Optional[str]:
+def check_diff_patterns(diff: Path, _: str) -> str | None:
     """Check diff content patterns to determine file type."""
     # Enhanced patterns for detecting commit types from diff content
     diff_patterns = get_diff_patterns()
@@ -362,7 +402,7 @@ def check_diff_patterns(diff: Path, _: str) -> Optional[str]:
 
 def get_test_patterns() -> dict[str, str]:
     """Get a dictionary of regex patterns for identifying file types by path.
-    
+
     Maps commit types to regex patterns for matching file paths.
     """
     return {
@@ -376,13 +416,13 @@ def get_test_patterns() -> dict[str, str]:
         "feat": r"^src/|^app/|^lib/|^modules/|^feature/|^features/|^api/|^services/|^controllers/|^routes/|^middleware/|^models/|^schemas/|^types/|^utils/|^helpers/|^core/|^internal/|^pkg/|^cmd/",
         "fix": r"^hotfix/|^bugfix/|^patch/|^fix/",
         "refactor": r"^refactor/|^refactoring/|^redesign/",
-        "security": r"^security/|^auth/|^authentication/|^authorization/|^access control/|^permission/|^privilege/|^validation/|^sanitization/|^encryption/|^decryption/|^hashing/|^cipher/|^token/|^session/|^xss/|^sql injection/|^csrf/|^cors/|^firewall/|^waf/|^pen test/|^penetration test/|^audit/|^scan/|^detect/|^protect/|^prevent/|^mitigate/|^remedy/|^fix/|^patch/|^update/|^secure/|^harden/|^fortify/|^safeguard/|^shield/|^guard/|^block/|^filter/|^screen/|^check/|^verify/|^validate/|^confirm/|^ensure/|^ensure/|^trustworthy/|^reliable/|^robust/|^resilient/|^immune/|^impervious/|^invulnerable"
+        "security": r"^security/|^auth/|^authentication/|^authorization/|^access control/|^permission/|^privilege/|^validation/|^sanitization/|^encryption/|^decryption/|^hashing/|^cipher/|^token/|^session/|^xss/|^sql injection/|^csrf/|^cors/|^firewall/|^waf/|^pen test/|^penetration test/|^audit/|^scan/|^detect/|^protect/|^prevent/|^mitigate/|^remedy/|^fix/|^patch/|^update/|^secure/|^harden/|^fortify/|^safeguard/|^shield/|^guard/|^block/|^filter/|^screen/|^check/|^verify/|^validate/|^confirm/|^ensure/|^ensure/|^trustworthy/|^reliable/|^robust/|^resilient/|^immune/|^impervious/|^invulnerable",
     }
 
 
 def get_diff_patterns() -> dict[str, str]:
     """Get a dictionary of regex patterns for identifying commit types by diff content.
-    
+
     Maps commit types to regex patterns for matching content in diffs.
     """
     return {
@@ -398,7 +438,7 @@ def get_diff_patterns() -> dict[str, str]:
     }
 
 
-def check_patterns(text: str, patterns: dict) -> Optional[str]:
+def check_patterns(text: str, patterns: dict) -> str | None:
     """Check if text matches any pattern in the given dictionary."""
     for type_name, pattern in patterns.items():
         if re.search(pattern, text, re.I):
@@ -406,29 +446,33 @@ def check_patterns(text: str, patterns: dict) -> Optional[str]:
     return None
 
 
-def group_related_changes(changes: List[FileChange]) -> List[List[FileChange]]:
+def group_related_changes(changes: list[FileChange]) -> list[list[FileChange]]:
     """Group related file changes together based on their type and location.
-    
+
     Groups changes by combining their type and parent directory to identify related changes.
     """
     groups = defaultdict(list)
     for change in changes:
-        key = f"{change.type}_{change.path.parent}" if change.path.parent.name != '.' else change.type
+        key = (
+            f"{change.type}_{change.path.parent}"
+            if change.path.parent.name != "."
+            else change.type
+        )
         groups[key].append(change)
     return list(groups.values())
 
 
-def generate_commit_message(changes: List[FileChange], config: Config) -> str:
+def generate_commit_message(changes: list[FileChange], config: Config) -> str:
     """Generate a commit message for a list of file changes.
-    
+
     Uses an AI model to generate appropriate commit messages based on the changes.
     For larger changes, generates a more comprehensive message.
     Falls back to a simple message if message generation fails.
-    
+
     Args:
         changes: List of file changes to generate a commit message for.
         config: Configuration object with settings for the commit message generator.
-        
+
     Returns:
         str: The generated commit message.
     """
@@ -437,10 +481,12 @@ def generate_commit_message(changes: List[FileChange], config: Config) -> str:
     is_comprehensive = total_diff_lines >= config.prompt_threshold
     diffs_summary = generate_diff_summary(changes, config) if is_comprehensive else ""
 
-    tool_calls = determine_tool_calls(is_comprehensive, combined_context, diffs_summary, config)
+    tool_calls = determine_tool_calls(is_comprehensive, combined_context, diffs_summary)
 
     for _ in range(config.attempt):
-        message = get_formatted_message(combined_context, tool_calls, changes, total_diff_lines, config)
+        message = get_formatted_message(
+            combined_context, tool_calls, changes, total_diff_lines, config
+        )
 
         if is_corrupted_message(message, config):
             continue
@@ -452,48 +498,55 @@ def generate_commit_message(changes: List[FileChange], config: Config) -> str:
             if result:
                 return result
         else:
-            return message
+            return message  # type: ignore
 
     return generate_fallback_message(changes)
 
 
-def is_corrupted_message(message: str, config: Config) -> bool:
+def is_corrupted_message(message: Optional[str], config: Config) -> bool:
     """Check if a generated message is corrupted or invalid.
-    
+
     A message is considered corrupted if it's empty, doesn't follow conventional commit
     format, or doesn't have brackets when required.
     """
-    return (not message
-            or not is_conventional_type(message)
-            or not is_conventional_type_with_brackets(message, config)
-            )
+    return (
+        not message
+        or not is_conventional_type(message)
+        or not is_conventional_type_with_brackets(message, config)
+    )
 
 
-def get_formatted_message(combined_context, tool_calls, changes, total_diff_lines, config):
+def get_formatted_message(
+    combined_context: str,
+    tool_calls: Dict[str, str],
+    changes: List[FileChange],
+    total_diff_lines: int,
+    config: Config,
+) -> Optional[str]:
     """Get a formatted commit message using the model.
-    
+
     Attempts to generate a message and then purifies it to remove any unwanted content.
     """
     # Attempt to get Message
-    message = attempt_generate_message(combined_context, tool_calls, changes, total_diff_lines, config)
+    message = attempt_generate_message(
+        combined_context, tool_calls, changes, total_diff_lines, config
+    )
 
     # Purify Message
-    message = purify_message(message)
-
-    return message
+    return purify_message(message)
 
 
 def purify_batrick(message: str) -> str:
     """Remove code block formatting (backticks) from a message.
-    
+
     Handles different code block formats including those with language specifiers.
     """
     if message.startswith("```") and message.endswith("```"):
         # Check if there's a language specifier like ```git or ```commit
         lines = message.split("\n")
-        if len(lines) > 2:
+        if len(lines) > 2:  # noqa: PLR2004
             # If first line has just the opening backticks with potential language specifier
-            if lines[0].startswith("```") and len(lines[0]) <= 10:
+            if lines[0].startswith("```") and len(lines[0]) <= 10:  # noqa: PLR2004
                 message = "\n".join(lines[1:-1])
             else:
                 message = message[3:-3]
@@ -505,60 +558,74 @@ def purify_batrick(message: str) -> str:
 
 def is_conventional_type(message: str) -> bool:
     """Check if a message follows conventional commit type format.
-    
+
     Verifies that the message contains one of the conventional commit types.
     """
-    if not any(x in message.lower() for x in
-               ["feat", "test", "fix", "docs", "chore",
-                "refactor", "style", "perf", "ci", "build",
-                "security"
-                ]
-               ):
-        return False
-    return True
+    return any(
+        x in message.lower()
+        for x in [
+            "feat",
+            "test",
+            "fix",
+            "docs",
+            "chore",
+            "refactor",
+            "style",
+            "perf",
+            "ci",
+            "build",
+            "security",
+        ]
+    )
 
 
 def is_conventional_type_with_brackets(message: str, config: Config) -> bool:
     """Check if a message follows conventional commit type format with brackets.
-    
+
     If FORCE_BRACKETS is enabled, ensures the message has brackets in the first word.
     """
     if not config.force_brackets:
         return True
 
     first_word: str = message.split()[0]
-    if "(" not in first_word and ")" not in first_word:
-        return False
-
-    return True
+    return not ("(" not in first_word and ")" not in first_word)
 
 
 def purify_commit_message_introduction(message: str) -> str:
     """Remove common introductory phrases from commit messages.
-    
+
     Removes prefixes like "commit message:" that are often added by AI models.
     """
     prefixes_to_remove = [
-        "commit message:", "commit:", "git commit message:",
-        "suggested commit message:", "here's a commit message:",
-        "here is the commit message:", "here is a commit message:"
+        "commit message:",
+        "commit:",
+        "git commit message:",
+        "suggested commit message:",
+        "here's a commit message:",
+        "here is the commit message:",
+        "here is a commit message:",
     ]
 
     for prefix in prefixes_to_remove:
         if message.lower().startswith(prefix):
-            message = message[len(prefix):].strip()
+            message = message[len(prefix) :].strip()
 
     return message
 
 
 def purify_explantory_message(message: str) -> str:
     """Remove explanatory sections from commit messages.
-    
+
     Removes sections that start with markers like "explanation:" or "note:".
     """
     explanatory_markers = [
-        "explanation:", "explanation of changes:", "note:", "notes:",
-        "this commit message", "i hope this helps", "please let me know"
+        "explanation:",
+        "explanation of changes:",
+        "note:",
+        "notes:",
+        "this commit message",
+        "i hope this helps",
+        "please let me know",
     ]
 
     for marker in explanatory_markers:
@@ -571,32 +638,40 @@ def purify_explantory_message(message: str) -> str:
 
 def purify_htmlxml(message: str) -> str:
     """Remove HTML/XML tags from a message.
-    
+
     Uses a regex pattern to strip out HTML-like tags from the message.
     """
-    return re.sub(r'<[^>]+>', '', message)
+    return re.sub(r"<[^>]+>", "", message)
 
 
 def purify_disclaimers(message: str) -> str:
     """Remove trailing disclaimers from a message.
-    
+
     Stops processing lines once it encounters a disclaimer phrase, keeping only
     the content before it.
     """
-    lines = message.strip().split('\n')
+    lines = message.strip().split("\n")
     filtered_lines = []
     for line in lines:
-        if any(x in line.lower() for x in
-               ["let me know if", "please review", "is this helpful", "hope this", "i've followed"]):
+        if any(
+            x in line.lower()
+            for x in [
+                "let me know if",
+                "please review",
+                "is this helpful",
+                "hope this",
+                "i've followed",
+            ]
+        ):
             break
         filtered_lines.append(line)
 
-    return '\n'.join(filtered_lines).strip()
+    return "\n".join(filtered_lines).strip()
 
 
-def purify_message(message: Optional[str]) -> Optional[str]:
+def purify_message(message: str | None) -> str | None:
     """Clean up the message from the chatbot to ensure it's a proper commit message.
-    
+
     Applies multiple purification steps to clean up the message:
     - Removes code blocks with backticks
     - Removes introductions like "commit message:"
@@ -624,35 +699,34 @@ def purify_message(message: Optional[str]) -> Optional[str]:
     message = purify_disclaimers(message)
 
     # Normalize whitespace and remove excess blank lines
-    message = re.sub(r'\n{3,}', '\n\n', message)
-
-    return message
+    return re.sub(r"\n{3,}", "\n\n", message)
 
 
-def determine_tool_calls(is_comprehensive: bool, combined_text: str, diffs_summary: str = "",
-                         config: Optional[Config] = None) -> Dict[str, Any]:
+def determine_tool_calls(
+    is_comprehensive: bool,
+    combined_text: str,
+    diffs_summary: str = "",
+) -> dict[str, Any]:
     """Determine the appropriate tool calls based on the comprehensiveness of the change.
-    
+
     Selects either a simple or comprehensive tool call based on the size of changes.
-    
+
     Args:
         is_comprehensive: Whether the change is comprehensive.
         combined_text: The combined text of all changes.
         diffs_summary: A summary of all diffs.
-        config: Configuration object with settings for the commit message generator.
-        
+
     Returns:
         Dict[str, Any]: The tool calls to use.
     """
     if is_comprehensive:
         return create_comprehensive_tool_call(combined_text, diffs_summary)
-    else:
-        return create_simple_tool_call(combined_text)
+    return create_simple_tool_call(combined_text)
 
 
-def create_simple_tool_call(combined_text: str) -> Dict[str, Any]:
+def create_simple_tool_call(combined_text: str) -> dict[str, Any]:
     """Create a tool call for generating a simple commit message.
-    
+
     Configures parameters for a short, conventional commit message.
     """
     return {
@@ -664,16 +738,18 @@ def create_simple_tool_call(combined_text: str) -> Dict[str, Any]:
                 "format": "inline",
                 "max_length": 72,
                 "include_scope": True,
-                "strict_conventional": True
-            }
+                "strict_conventional": True,
+            },
         },
-        "type": "function"
+        "type": "function",
     }
 
 
-def create_comprehensive_tool_call(combined_text: str, diffs_summary: str) -> Dict[str, Any]:
+def create_comprehensive_tool_call(
+    combined_text: str, diffs_summary: str
+) -> dict[str, Any]:
     """Create a tool call for generating a comprehensive commit message.
-    
+
     Configures parameters for a detailed commit message with multiple sections.
     """
     return {
@@ -688,33 +764,34 @@ def create_comprehensive_tool_call(combined_text: str, diffs_summary: str) -> Di
                 "include_scope": True,
                 "include_breaking": True,
                 "include_references": True,
-                "sections": [
-                    "summary",
-                    "changes",
-                    "breaking",
-                    "references"
-                ],
-                "strict_conventional": True
-            }
+                "sections": ["summary", "changes", "breaking", "references"],
+                "strict_conventional": True,
+            },
         },
-        "type": "function"
+        "type": "function",
     }
 
 
-def attempt_generate_message(combined_context: str, tool_calls: Dict[str, Any], changes: List[FileChange],
-                             total_diff_lines: int, config: Config) -> Optional[str]:
+def attempt_generate_message(
+    combined_context: str,
+    tool_calls: dict[str, Any],
+    changes: list[FileChange],
+    total_diff_lines: int,
+    config: Config,
+) -> str | None:
     """Attempt to generate a commit message using the model.
-    
+
     Uses the appropriate prompt based on the size of changes and sends it to the model.
     """
     prompt = determine_prompt(combined_context, changes, total_diff_lines, config)
     return model_prompt(prompt, tool_calls, config)
 
 
-def handle_comprehensive_message(message: Optional[str], changes: List[FileChange], config: Config) -> (
-        Optional)[Union[str, Literal["retry"]]]:
+def handle_comprehensive_message(
+    message: str | None, changes: list[FileChange], config: Config
+) -> Optional[str]:
     """Handle a comprehensive commit message, with user interaction for short messages.
-    
+
     For messages shorter than MIN_COMPREHENSIVE_LENGTH, prompts the user to choose whether to
     use the message, retry generation, or use a fallback message.
     """
@@ -723,28 +800,30 @@ def handle_comprehensive_message(message: Optional[str], changes: List[FileChang
 
     if len(message) < config.min_comprehensive_length:
         action = handle_short_comprehensive_message(message).strip().lower()
-        while action not in ["use", 'u', 'retry', 'r', 'fallback', 'f']:
-            action = input("\nChoose an option between the options above: or leave it empty to use: ").strip()
-        if action in ["use", 'u', ""]:
+        while action not in ["use", "u", "retry", "r", "fallback", "f"]:
+            action = input(
+                "\nChoose an option between the options above: or leave it empty to use: "
+            ).strip()
+        if action in ["use", "u", ""]:
             return message
-        elif action in ["retry", 'r']:
+        if action in ["retry", "r"]:
             return "retry"
-        elif action in ["fallback", 'f']:
+        if action in ["fallback", "f"]:
             return generate_fallback_message(changes)
     return message
 
 
-def create_combined_context(changes: List[FileChange]) -> str:
+def create_combined_context(changes: list[FileChange]) -> str:
     """Create a combined context string from file changes.
-    
+
     Creates a newline-separated string with the status and path for each change.
     """
     return "\n".join([f"{change.status} {change.path}" for change in changes])
 
 
-def calculate_total_diff_lines(changes: List[FileChange]) -> int:
+def calculate_total_diff_lines(changes: list[FileChange]) -> int:
     """Calculate the total number of lines changed.
-    
+
     Sums up the diff_lines attribute of each file change.
     """
     return sum(change.diff_lines for change in changes)
@@ -752,11 +831,13 @@ def calculate_total_diff_lines(changes: List[FileChange]) -> int:
 
 def handle_short_comprehensive_message(model_message: str) -> str:
     """Handle a comprehensive message that is too short, with user interaction.
-    
-    Displays a warning and prompts the user to choose between using the message, 
+
+    Displays a warning and prompts the user to choose between using the message,
     retrying generation, or using an auto-generated message.
     """
-    console.print("\n[yellow]Warning: Generated commit message seems too brief for a large change.[/yellow]")
+    console.print(
+        "\n[yellow]Warning: Generated commit message seems too brief for a large change.[/yellow]"
+    )
     console.print(f"Generated message: [cyan]{model_message}[/cyan]\n")
 
     table = Table(show_header=False, style="blue")
@@ -769,42 +850,48 @@ def handle_short_comprehensive_message(model_message: str) -> str:
 
     if choice == "1":
         return "use"
-    elif choice == "2":
+    if choice == "2":
         return "retry"
-    else:
-        return "fallback"
+    return "fallback"
 
 
-def generate_fallback_message(changes: List[FileChange]) -> str:
+def generate_fallback_message(changes: list[FileChange]) -> str:
     """Generate a simple fallback commit message based on file changes.
-    
+
     Creates a basic commit message using the type of the first change and
     listing the names of all changed files.
     """
     return f"{changes[0].type}: update {' '.join(str(c.path.name) for c in changes)}"
 
 
-def generate_diff_summary(changes: List[FileChange], config: Config) -> str:
+def generate_diff_summary(changes: list[FileChange], config: Config) -> str:
     """Generate a summary of diffs for all changes.
-    
+
     Creates a formatted summary of all diffs, shortening them if necessary.
-    
+
     Args:
         changes: List of file changes to summarize.
         config: Configuration object with settings for the commit message generator.
-        
+
     Returns:
         str: A formatted summary of all diffs.
     """
-    return "\n".join([
-        shorten_diff(f"File [{i + 1}]: {change.path}\nStatus: {change.status}\nChanges:\n{change.diff}\n", config)
-        for i, change in enumerate(changes)
-    ])
+    return "\n".join(
+        [
+            shorten_diff(
+                f"File [{i + 1}]: {change.path}\nStatus: {change.status}\nChanges:\n{change.diff}\n",
+                config,
+            )
+            for i, change in enumerate(changes)
+        ]
+    )
 
 
-def determine_prompt(combined_text: str, changes: List[FileChange], diff_lines: int, config: Config) -> str:
+def determine_prompt(
+    combined_text: str, changes: list[FileChange], diff_lines: int, config: Config
+) -> str:
     """Determine the appropriate prompt based on the size of changes.
-    
+
     Uses a simple prompt for small changes and a comprehensive prompt for larger ones.
     """
     # For small changes (less than 50 lines), use a simple inline commit message
@@ -817,13 +904,17 @@ def determine_prompt(combined_text: str, changes: List[FileChange], diff_lines: 
     return generate_comprehensive_prompt(combined_text, diffs_summary, config)
 
 
-def generate_simple_prompt(combined_text, config: Config):
+def generate_simple_prompt(combined_text: str, config: Config) -> str:
     """Generate a prompt for a simple commit message.
-    
+
     Creates a prompt instructing the model to generate a conventional commit message
     for smaller changes.
     """
-    force_brackets_line = "Please use brackets with conventional commits [e.g. feat(main): ...]" if config.force_brackets else ""
+    force_brackets_line = (
+        "Please use brackets with conventional commits [e.g. feat(main): ...]"
+        if config.force_brackets
+        else ""
+    )
     return f"""
         Analyze these file changes and generate a conventional commit message:
         {combined_text}
@@ -833,13 +924,19 @@ def generate_simple_prompt(combined_text, config: Config):
         """
 
 
-def generate_comprehensive_prompt(combined_text, diffs_summary, config: Config):
+def generate_comprehensive_prompt(
+    combined_text: str, diffs_summary: str, config: Config
+) -> str:
     """Generate a prompt for a comprehensive commit message.
-    
+
     Creates a detailed prompt with rules and guidelines for generating a
     comprehensive conventional commit message.
     """
-    force_brackets_line = "Please use brackets with conventional commits [e.g. feat(main): ...]" if config.force_brackets else ""
+    force_brackets_line = (
+        "Please use brackets with conventional commits [e.g. feat(main): ...]"
+        if config.force_brackets
+        else ""
+    )
     return f"""
     Analyze these file changes and generate a detailed conventional commit message:
 
@@ -871,33 +968,37 @@ def generate_comprehensive_prompt(combined_text, diffs_summary, config: Config):
     """
 
 
-def model_prompt(prompt: str, tool_calls: Dict[str, Any], config: Config) -> str:
+def model_prompt(
+    prompt: str, tool_calls: dict[str, Any], config: Config
+) -> Optional[str]:
     """Send a prompt to the model and get a response.
-    
+
     Wraps the model call with a progress indicator.
-    
+
     Args:
         prompt: The prompt to send to the model.
         tool_calls: The tool calls to include in the request.
         config: Configuration object with settings for the commit message generator.
-        
+
     Returns:
         str: The model's response.
     """
     return execute_with_progress(get_model_response, prompt, tool_calls, config)
 
 
-def get_model_response(prompt: str, tool_calls: Dict[str, Any], config: Config) -> Optional[str]:
+def get_model_response(
+    prompt: str, tool_calls: dict[str, Any], config: Config
+) -> str | None:
     """Get a response from the model.
-    
+
     Makes an API call to the model with the given prompt and tool calls.
     Handles errors and returns the model's response content.
-    
+
     Args:
         prompt: The prompt to send to the model.
         tool_calls: The tool calls to include in the request.
         config: Configuration object with settings for the commit message generator.
-        
+
     Returns:
         Optional[str]: The model's response, or None if an error occurred.
     """
@@ -905,51 +1006,72 @@ def get_model_response(prompt: str, tool_calls: Dict[str, Any], config: Config) 
         response = client.chat.completions.create(
             model=config.model,
             messages=[
-                {"role": "system", "content": "Follow instructions precisely and respond concisely."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "Follow instructions precisely and respond concisely.",
+                },
+                {"role": "user", "content": prompt},
             ],
-            tool_calls=[tool_calls]  # Wrap in list as API expects array of tool calls
+            tool_calls=[tool_calls],  # Wrap in list as API expects array of tool calls
         )
-        return response.choices[0].message.content if response and response.choices else None
+        return (
+            response.choices[0].message.content
+            if response and response.choices
+            else None
+        )
     except Exception as e:
-        console.print(f"[red]Error in model response: {str(e)}[/red]")
+        console.print(f"[red]Error in model response: {e!s}[/red]")
         return None
 
 
-def execute_with_progress(func, *args):
+def execute_with_progress(
+    func: Callable[..., Optional[str]], *args: object
+) -> Optional[str]:
     """Execute a function with a progress indicator.
-    
+
     Shows a spinner while waiting for the function to complete.
     """
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
         task = progress.add_task("Waiting for model response...", total=None)
         return execute_with_timeout(func, progress, task, *args)
 
 
-def execute_with_timeout(func, progress, task, *args, timeout=None):
+def execute_with_timeout(
+    func: Callable[..., Optional[str]],
+    progress: Progress,
+    task: TaskID,
+    *args: object,
+    timeout: Optional[int] = None,
+) -> Optional[str]:
     """Execute a function with a timeout.
-    
+
     Runs the function in a separate thread and cancels it if it takes too long.
     Handles errors and cleans up the progress display.
-    
+
     Args:
         func: The function to execute.
         progress: The progress object to update.
         task: The task ID to update.
         *args: Arguments to pass to the function.
         timeout: The timeout in seconds. If None, uses the config's fallback_timeout.
-        
+
     Returns:
         The result of the function, or None if it timed out or raised an exception.
     """
     # Extract config from args if it's the last argument
-    config = args[-1] if args and isinstance(args[-1], Config) else None
-    timeout = timeout or (config.fallback_timeout if config else 10)
+    config: Optional[Config] = (
+        args[-1] if args and isinstance(args[-1], Config) else None
+    )
+    timeout_value = timeout or (cast(int, config.fallback_timeout) if config else 10)
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future = executor.submit(func, *args)
         try:
-            response = future.result(timeout=timeout)
+            response = future.result(timeout=timeout_value)
             return process_response(response)
         except (TimeoutError, Exception) as e:
             handle_error(e)
@@ -958,42 +1080,45 @@ def execute_with_timeout(func, progress, task, *args, timeout=None):
             progress.remove_task(task)
 
 
-def process_response(response: Optional[str]) -> Optional[str]:
+def process_response(response: str | None) -> str | None:
     """Process the response from the model.
-    
+
     Formats and displays the first line of the response and returns the full message.
     """
     if not response:
         return None
     message = response.strip()
-    first_line = message.split("\n")[0] if '\n' in message else message
+    first_line = message.split("\n")[0] if "\n" in message else message
     console.print(f"[dim]Generated message:[/dim] [cyan]{first_line}[/cyan]")
     return message
 
 
 def handle_error(error: Exception) -> None:
     """Handle an error that occurred during model response.
-    
+
     Displays an appropriate message based on the type of error.
     """
     if isinstance(error, TimeoutError):
-        console.print("[yellow]Model response timed out, using fallback message[/yellow]")
+        console.print(
+            "[yellow]Model response timed out, using fallback message[/yellow]"
+        )
     else:
-        console.print(f"[yellow]Error in model response, using fallback message: {str(error)}[/yellow]")
-    return None
+        console.print(
+            f"[yellow]Error in model response, using fallback message: {error!s}[/yellow]"
+        )
 
 
-def commit_changes(files: List[str], message: str):
+def commit_changes(files: list[str], message: str) -> None:
     """Commit the changes to the specified files with the given message.
-    
+
     Stages the files, commits them with the provided message, and displays the result.
     """
     with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
     ) as progress:
         # Stage files
         stage_files(files, progress)
@@ -1005,9 +1130,9 @@ def commit_changes(files: List[str], message: str):
         display_commit_result(commit_result, message)
 
 
-def do_commit(message: str, progress: Progress) -> Tuple[str, int]:
+def do_commit(message: str, progress: Progress) -> tuple[str, int]:
     """Perform the actual git commit.
-    
+
     Executes the git commit command with the given message and tracks progress.
     """
     task = progress.add_task("Committing changes...", total=1)
@@ -1016,9 +1141,9 @@ def do_commit(message: str, progress: Progress) -> Tuple[str, int]:
     return stdout, code
 
 
-def stage_files(files: List[str], progress: Progress):
+def stage_files(files: list[str], progress: Progress) -> None:
     """Stage files for commit.
-    
+
     Adds each file to the git staging area and tracks progress.
     """
     stage_task = progress.add_task("Staging files...", total=len(files))
@@ -1027,9 +1152,9 @@ def stage_files(files: List[str], progress: Progress):
         progress.advance(stage_task)
 
 
-def display_commit_result(result: Tuple[str, int], message: str):
+def display_commit_result(result: tuple[str, int], message: str) -> None:
     """Display the result of the commit operation.
-    
+
     Shows a success or error message based on the commit result.
     """
     stderr, code = result
@@ -1039,9 +1164,9 @@ def display_commit_result(result: Tuple[str, int], message: str):
         console.print(f"[red]✘ Error committing changes:[/red] {stderr}")
 
 
-def reset_staging():
+def reset_staging() -> None:
     """Reset the git staging area.
-    
+
     Unstages all changes by resetting the HEAD pointer.
     """
     run_git_command(["git", "reset", "HEAD"])
@@ -1049,33 +1174,27 @@ def reset_staging():
 
 def format_diff_lines(lines: int) -> str:
     """Format the number of diff lines with color based on size.
-    
+
     Uses green for small changes, yellow for medium, and red for large changes.
     """
-    if lines < 10:
+    if lines < GREEN_FORMAT_THRESHOLD:
         return f"[green]{lines}[/green]"
-    elif lines < 50:
+    if lines < YELLOW_FORMAT_THRESHOLD:
         return f"[yellow]{lines}[/yellow]"
-    else:
-        return f"[red]{lines}[/red]"
+    return f"[red]{lines}[/red]"
 
 
 def format_time_ago(timestamp: float) -> str:
     """Format a timestamp as a human-readable time ago string.
-    
+
     Converts a timestamp to a relative time like "5m ago" or "2h ago".
     Returns "N/A" for invalid timestamps.
     """
     if timestamp == 0:
         return "N/A"
 
-    diff = datetime.now().timestamp() - timestamp
-    time_units = [
-        (86400, "d"),
-        (3600, "h"),
-        (60, "m"),
-        (0, "just now")
-    ]
+    diff = datetime.now(UTC).timestamp() - timestamp
+    time_units = [(86400, "d"), (3600, "h"), (60, "m"), (0, "just now")]
 
     for seconds, unit in time_units:
         if diff >= seconds:
@@ -1090,20 +1209,20 @@ def format_time_ago(timestamp: float) -> str:
 
 def create_staged_table() -> Table:
     """Create a table for displaying staged changes.
-    
+
     Returns a formatted rich Table with appropriate styling and title.
     """
     return Table(
         title="Staged Changes",
         show_header=True,
         header_style="bold magenta",
-        show_lines=True
+        show_lines=True,
     )
 
 
-def config_staged_table(table) -> None:
+def config_staged_table(table: Table) -> None:
     """Configure columns for the staged changes table.
-    
+
     Adds columns for status, file path, type, changes, and last modified time.
     """
     table.add_column("Status", justify="center", width=8)
@@ -1113,30 +1232,27 @@ def config_staged_table(table) -> None:
     table.add_column("Last Modified", justify="right", width=12)
 
 
-def apply_table_styling(table, change):
+def apply_table_styling(table: Table, change: FileChange) -> None:
     """Apply styling to a row in the staged changes table.
-    
+
     Sets colors based on the file status and adds formatted values to the table.
     """
-    status_color = {
-        'M': 'yellow',
-        'A': 'green',
-        'D': 'red',
-        'R': 'blue'
-    }.get(change.status, 'white')
+    status_color = {"M": "yellow", "A": "green", "D": "red", "R": "blue"}.get(
+        change.status, "white"
+    )
 
     table.add_row(
         f"[{status_color}]{change.status}[/{status_color}]",
         str(change.path),
         f"[green]{change.type}[/green]",
         format_diff_lines(change.diff_lines),
-        format_time_ago(change.last_modified)
+        format_time_ago(change.last_modified),
     )
 
 
-def display_changes(changes: List[FileChange]):
+def display_changes(changes: list[FileChange]) -> None:
     """Display a table of all file changes.
-    
+
     Creates, configures and populates a table showing all file changes with their details.
     """
     # Create table
@@ -1153,31 +1269,36 @@ def display_changes(changes: List[FileChange]):
 
 def find_git_root() -> Path:
     """Find the root directory of the git repository.
-    
+
     Uses git rev-parse to find the repository root.
     Raises FileNotFoundError if not in a git repository.
     """
+
+    def raise_git_error(message: str, exception: Optional[Exception]) -> NoReturn:
+        """Helper function to raise a FileNotFoundError."""
+        raise FileNotFoundError(message) from exception
+
     try:
         # Use git rev-parse to find the root of the repository
         stdout, stderr, code = run_git_command(["git", "rev-parse", "--show-toplevel"])
         if code != 0:
-            raise FileNotFoundError(f"Git error: {stderr}")
+            raise_git_error(f"Git error: {stderr}", None)
 
         # Get the absolute path and normalize it
         root_path = Path(stdout.strip()).resolve()
 
         if not root_path.exists() or not (root_path / ".git").exists():
-            raise FileNotFoundError("Not a git repository")
-
-        return root_path
+            raise_git_error("Not a git repository", None)
 
     except Exception as e:
-        raise FileNotFoundError(f"Failed to determine git root: {str(e)}")
+        raise_git_error(f"Failed to determine git root: {e!s}", e)
+    else:
+        return root_path
 
 
 def handle_non_existent_git_repo() -> None:
     """Verify git repository exists and change to its root directory.
-    
+
     Changes the current working directory to the git repository root.
     Exits the program if not in a git repository or unable to change directory.
     """
@@ -1186,24 +1307,25 @@ def handle_non_existent_git_repo() -> None:
         try:
             os.chdir(root)
         except OSError as e:
-            console.print(f"[red]Error: Failed to change directory: {str(e)}[/red]")
+            console.print(f"[red]Error: Failed to change directory: {e!s}[/red]")
             sys.exit(1)
     except FileNotFoundError as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
+        console.print(f"[red]Error: {e!s}[/red]")
         sys.exit(1)
 
 
-def main(config: Optional[Config] = None):
+def main(config: Optional[Config] = None) -> None:
     """Main entry point for the program.
-    
+
     Handles repository verification, gets file changes, and processes commit messages.
-    
+
     Args:
         config: Configuration object with settings for the commit message generator.
                If None, uses default configuration.
     """
     if config is None:
         from c4f.config import default_config
+
         config = default_config
 
     handle_non_existent_git_repo()
@@ -1223,9 +1345,9 @@ def main(config: Optional[Config] = None):
             accept_all = process_change_group(group, config)
 
 
-def get_valid_changes():
+def get_valid_changes() -> Optional[List[FileChange]]:
     """Get a list of valid file changes.
-    
+
     Parses git status and processes any changed files found.
     """
     changed_files = parse_git_status()
@@ -1235,9 +1357,11 @@ def get_valid_changes():
     return process_changed_files(changed_files)
 
 
-def process_changed_files(changed_files):
+def process_changed_files(
+    changed_files: List[Tuple[STATUS_TYPE, str]],
+) -> List[FileChange]:
     """Process a list of changed files.
-    
+
     Creates FileChange objects for each changed file with progress tracking.
     """
     changes = []
@@ -1251,22 +1375,22 @@ def process_changed_files(changed_files):
     return changes
 
 
-def create_progress_bar():
+def create_progress_bar() -> Progress:
     """Create a progress bar for tracking file analysis.
-    
+
     Returns a configured rich Progress object.
     """
     return Progress(
         "[progress.description]{task.description}",
         BarColumn(),
         TaskProgressColumn(),
-        console=console
+        console=console,
     )
 
 
-def create_progress_tasks(progress, total):
+def create_progress_tasks(progress: Progress, total: int) -> Tuple[TaskID, TaskID]:
     """Create tasks for tracking file analysis progress.
-    
+
     Returns task IDs for analyzing files and getting diffs.
     """
     analyze_task = progress.add_task("Analyzing files...", total=total)
@@ -1274,9 +1398,11 @@ def create_progress_tasks(progress, total):
     return analyze_task, diff_task
 
 
-def process_single_file(status, file_path, progress, diff_task):
+def process_single_file(
+    status: STATUS_TYPE, file_path: str, progress: Progress, diff_task: TaskID
+) -> Optional[FileChange]:
     """Process a single changed file.
-    
+
     Gets the diff for the file and creates a FileChange object if a diff is found.
     """
     path = Path(file_path)
@@ -1288,9 +1414,9 @@ def process_single_file(status, file_path, progress, diff_task):
     return None
 
 
-def create_file_change(status, file_path):
+def create_file_change(status: STATUS_TYPE, file_path: str) -> Optional[FileChange]:
     """Create a FileChange object for a changed file.
-    
+
     Gets the diff and determines the file type.
     Returns None if no diff is found.
     """
@@ -1300,23 +1426,25 @@ def create_file_change(status, file_path):
     return FileChange(path, status, diff, file_type) if diff else None
 
 
-def exit_with_no_changes():
+def exit_with_no_changes() -> NoReturn:
     """Exit the program when no changes are found.
-    
+
     Displays a message and exits with status code 0.
     """
     console.print("[yellow]⚠ No changes to commit[/yellow]")
     sys.exit(0)
 
 
-def process_change_group(group: List["FileChange"], config: Config, accept_all: bool = False) -> bool:
+def process_change_group(
+    group: list[FileChange], config: Config, accept_all: bool = False
+) -> bool:
     """Process a group of related file changes.
-    
+
     Args:
         group: List of file changes to process.
         config: Configuration object with settings for the commit message generator.
         accept_all: Whether to accept all future commits without prompting.
-        
+
     Returns:
         bool: True if the user chose to accept all future commits.
     """
@@ -1341,7 +1469,7 @@ def process_change_group(group: List["FileChange"], config: Config, accept_all: 
 
 def get_valid_user_response() -> str:
     """Get a valid response from the user for commit actions.
-    
+
     Prompts the user until a valid response is provided.
     """
     prompt = "Proceed with commit? ([Y/n] [/e] to edit [all/a] for accept all): "
@@ -1352,15 +1480,15 @@ def get_valid_user_response() -> str:
         prompt = "Invalid response. " + prompt
 
 
-def handle_user_response(response: str, group: List[FileChange], message: str) -> bool:
+def handle_user_response(response: str, group: list[FileChange], message: str) -> bool:
     """Handle the user's response for a commit action.
-    
+
     Performs the appropriate action based on the user's response:
     - y/empty: commit the changes
     - n: skip the changes
     - e: edit the commit message
     - a/all: accept all future commits
-    
+
     Returns True if the user chose to accept all future commits.
     """
     actions = {
@@ -1369,7 +1497,7 @@ def handle_user_response(response: str, group: List[FileChange], message: str) -
         "y": lambda: do_group_commit(group, message),
         "": lambda: do_group_commit(group, message),
         "n": lambda: console.print("[yellow]Skipping these changes...[/yellow]"),
-        "e": lambda: do_group_commit(group, input("Enter new commit message: "))
+        "e": lambda: do_group_commit(group, input("Enter new commit message: ")),
     }
 
     if response not in actions:
@@ -1377,12 +1505,14 @@ def handle_user_response(response: str, group: List[FileChange], message: str) -
         sys.exit(1)
 
     actions[response]()
-    return True if response in ["a", "all"] else False
+    return response in ["a", "all"]
 
 
-def do_group_commit(group: List[FileChange], message: str, accept_all: bool = False) -> bool:
+def do_group_commit(
+    group: list[FileChange], message: str, accept_all: bool = False
+) -> bool:
     """Commit a group of changes and return whether to accept all future commits.
-    
+
     Commits the files in the group with the given message.
     Returns the accept_all flag to indicate whether to accept all future commits.
     """
@@ -1391,16 +1521,18 @@ def do_group_commit(group: List[FileChange], message: str, accept_all: bool = Fa
     return accept_all
 
 
-def display_commit_preview(message):
+def display_commit_preview(message: str) -> None:
     """Display a preview of the commit message.
-    
+
     Shows the commit message in a formatted panel.
     """
-    console.print(Panel(
-        f"Proposed commit message:\n[bold cyan]{message}[/bold cyan]",
-        title="Commit Preview",
-        border_style="blue"
-    ))
+    console.print(
+        Panel(
+            f"Proposed commit message:\n[bold cyan]{message}[/bold cyan]",
+            title="Commit Preview",
+            border_style="blue",
+        )
+    )
 
 
 if __name__ == "__main__":

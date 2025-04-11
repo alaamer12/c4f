@@ -1,7 +1,7 @@
 """
 C4F (Commit For Free) - An Intelligent Git Commit Message Generator
 
-A sophisticated Git commit message generator that uses AI to create meaningful, 
+A sophisticated Git commit message generator that uses AI to create meaningful,
 conventional commit messages based on your code changes.
 
 Key Features:
@@ -60,11 +60,28 @@ paid AI services while maintaining high-quality commit message generation.
 """
 __python_requires__ = ">=3.11"
 __keywords__ = [
-    "git", "commit", "ai", "artificial-intelligence", "conventional-commits",
-    "developer-tools", "automation", "cli", "command-line", "productivity",
-    "version-control", "commit-message", "code-quality", "workflow",
-    "git-tools", "semantic-commits", "devops", "software-development",
-    "python-tool", "git-automation", "commit-history", "code-documentation"
+    "git",
+    "commit",
+    "ai",
+    "artificial-intelligence",
+    "conventional-commits",
+    "developer-tools",
+    "automation",
+    "cli",
+    "command-line",
+    "productivity",
+    "version-control",
+    "commit-message",
+    "code-quality",
+    "workflow",
+    "git-tools",
+    "semantic-commits",
+    "devops",
+    "software-development",
+    "python-tool",
+    "git-automation",
+    "commit-history",
+    "code-documentation",
 ]
 
 __status__ = "Development/Stable"
@@ -73,7 +90,7 @@ __project_urls__ = {
     "Documentation": "https://github.com/alaamer12/c4f",
     "Source Code": "https://github.com/alaamer12/c4f",
     "Changelog": "https://github.com/alaamer12/c4f/blob/main/CHANGELOG.md",
-    "Contributing": "https://github.com/alaamer12/c4f/blob/main/CONTRIBUTING.md"
+    "Contributing": "https://github.com/alaamer12/c4f/blob/main/CONTRIBUTING.md",
 }
 
 __release_date__ = "2025-04-03"
@@ -83,22 +100,22 @@ __maintainer_email__ = "ahmedmuhamed12@gmail.com"
 from .cli import run_main as main
 
 __all__ = [
-    'main',
-    '__version__',
-    '__author__',
-    '__email__',
-    '__license__',
-    '__copyright__',
-    '__github__',
-    '__documentation__',
-    '__homepage__',
-    '__description__',
-    '__long_description__',
-    '__python_requires__',
-    '__keywords__',
-    '__status__',
-    '__project_urls__',
-    '__release_date__',
-    '__maintainer__',
-    '__maintainer_email__',
+    "__author__",
+    "__copyright__",
+    "__description__",
+    "__documentation__",
+    "__email__",
+    "__github__",
+    "__homepage__",
+    "__keywords__",
+    "__license__",
+    "__long_description__",
+    "__maintainer__",
+    "__maintainer_email__",
+    "__project_urls__",
+    "__python_requires__",
+    "__release_date__",
+    "__status__",
+    "__version__",
+    "main",
 ]
