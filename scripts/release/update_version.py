@@ -2,11 +2,12 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 # Add the project root directory to Python path
 PROJECT_NAME = "c4f"
-project_root = str(Path(__file__).resolve().parent.parent.parent)  # Go up one more level to reach project root
+project_root = str(
+    Path(__file__).resolve().parent.parent.parent
+)  # Go up one more level to reach project root
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -23,24 +24,26 @@ common_files = [
 
 
 def read_file_content(file_path: Path) -> str:
-    with open(file_path, 'r') as f:
+    with open(file_path) as f:
         return f.read()
 
 
 def write_file_content(file_path: Path, content: str) -> None:
-    with open(file_path, 'w') as f:
+    with open(file_path, "w") as f:
         f.write(content)
 
 
-def parse_version(version_str: str) -> Tuple[int, int, int, str, int]:
+def parse_version(version_str: str) -> tuple[int, int, int, str, int]:
     """Parse version string into components including post-release info."""
     # Check for post-release format
-    post_match = re.match(r'(\d+\.\d+\.\d+)(?:\.post\.(\d+)|\.post(\d+)|-post(\d+))?$', version_str)
+    post_match = re.match(
+        r"(\d+\.\d+\.\d+)(?:\.post\.(\d+)|\.post(\d+)|-post(\d+))?$", version_str
+    )
     if not post_match:
         raise ValueError(f"Invalid version format: {version_str}")
 
     main_version, post_dot, post_num, post_dash = post_match.groups()
-    major, minor, patch = map(int, main_version.split('.'))
+    major, minor, patch = map(int, main_version.split("."))
 
     # Determine post-release number
     post_release = 0
@@ -54,7 +57,9 @@ def parse_version(version_str: str) -> Tuple[int, int, int, str, int]:
     return major, minor, patch, "post", post_release
 
 
-def format_version(major: int, minor: int, patch: int, release_type: str = "", release_num: int = 0) -> str:
+def format_version(
+    major: int, minor: int, patch: int, release_type: str = "", release_num: int = 0
+) -> str:
     """Format version components into a version string."""
     base_version = f"{major}.{minor}.{patch}"
 
@@ -70,23 +75,21 @@ def get_version_increment(current_version: str, increment_type: str) -> str:
         major, minor, patch, rel_type, rel_num = parse_version(current_version)
     except ValueError:
         # Fallback to basic version parsing if post-release format is not detected
-        major, minor, patch = map(int, current_version.split('.'))
+        major, minor, patch = map(int, current_version.split("."))
         rel_type, rel_num = "", 0
 
-    if increment_type.lower() == 'major':
+    if increment_type.lower() == "major":
         return f"{major + 1}.0.0"
-    elif increment_type.lower() == 'minor':
+    if increment_type.lower() == "minor":
         return f"{major}.{minor + 1}.0"
-    elif increment_type.lower() == 'patch':
+    if increment_type.lower() == "patch":
         return f"{major}.{minor}.{patch + 1}"
-    elif increment_type.lower() == 'post':
+    if increment_type.lower() == "post":
         # For post-release, increment the post number or start at 1
         if rel_type == "post":
             return format_version(major, minor, patch, "post", rel_num + 1)
-        else:
-            return format_version(major, minor, patch, "post", 1)
-    else:
-        raise ValueError("Invalid version increment type")
+        return format_version(major, minor, patch, "post", 1)
+    raise ValueError("Invalid version increment type")
 
 
 def get_version_decrement(current_version: str) -> str:
@@ -95,25 +98,24 @@ def get_version_decrement(current_version: str) -> str:
         major, minor, patch, rel_type, rel_num = parse_version(current_version)
     except ValueError:
         # Fallback to basic version parsing if post-release format is not detected
-        major, minor, patch = map(int, current_version.split('.'))
+        major, minor, patch = map(int, current_version.split("."))
         rel_type, rel_num = "", 0
 
     # First handle post-release decrement
     if rel_type == "post" and rel_num > 1:
         return format_version(major, minor, patch, "post", rel_num - 1)
-    elif rel_type == "post" and rel_num == 1:
+    if rel_type == "post" and rel_num == 1:
         # Remove post-release suffix entirely
         return f"{major}.{minor}.{patch}"
 
     # If no post-release or post-release is already at 1, decrement the main version
     if patch > 0:
         return f"{major}.{minor}.{patch - 1}"
-    elif minor > 0:
+    if minor > 0:
         return f"{major}.{minor - 1}.0"
-    elif major > 0:
+    if major > 0:
         return f"{major - 1}.0.0"
-    else:
-        raise ValueError(styles.ERROR("Cannot decrement version 0.0.0"))
+    raise ValueError(styles.ERROR("Cannot decrement version 0.0.0"))
 
 
 def update_version_in_content(content: str, old_version: str, new_version: str) -> str:
@@ -121,14 +123,14 @@ def update_version_in_content(content: str, old_version: str, new_version: str) 
     # First find how version is formatted in the file
     patterns = [
         r'version\s*=\s*"[^"]*"',  # version = "0.1.3"
-        r'version\s*=\s*\'[^\']*\'',  # version = '0.1.3'
-        r'version\s*=\s*[0-9.]+',  # version = 0.1.3
+        r"version\s*=\s*\'[^\']*\'",  # version = '0.1.3'
+        r"version\s*=\s*[0-9.]+",  # version = 0.1.3
         r'__version__\s*=\s*"[^"]*"',  # __version__ = "0.1.3"
-        r'__version__\s*=\s*\'[^\']*\'',  # __version__ = '0.1.3'
-        r'__version__\s*=\s*[0-9.]+',  # __version__ = 0.1.3
+        r"__version__\s*=\s*\'[^\']*\'",  # __version__ = '0.1.3'
+        r"__version__\s*=\s*[0-9.]+",  # __version__ = 0.1.3
         r'VERSION\s*=\s*"[^"]*"',  # VERSION = "0.1.3"
-        r'VERSION\s*=\s*\'[^\']*\'',  # VERSION = '0.1.3'
-        r'VERSION\s*=\s*[0-9.]+',  # version = 0.1.3
+        r"VERSION\s*=\s*\'[^\']*\'",  # VERSION = '0.1.3'
+        r"VERSION\s*=\s*[0-9.]+",  # version = 0.1.3
     ]
 
     for pattern in patterns:
@@ -189,7 +191,7 @@ def get_current_version(file_path: Path) -> str:
         raise ValueError(styles.ERROR(f"Failed to extract version: {e}"))
 
 
-def validate_files(files: List[Path], quiet: bool) -> None:
+def validate_files(files: list[Path], quiet: bool) -> None:
     if not quiet:
         print(styles.INFO("Checking files..."))
     for file_path in files:
@@ -207,13 +209,19 @@ def get_increment_type() -> str:
     print(styles.OPTION("post  - For post-release updates"))
 
     while True:
-        increment_type = input(styles.PROMPT("Choose version type (major/minor/patch/post): ")).lower()
-        if increment_type in ['major', 'minor', 'patch', 'post']:
+        increment_type = input(
+            styles.PROMPT("Choose version type (major/minor/patch/post): ")
+        ).lower()
+        if increment_type in ["major", "minor", "patch", "post"]:
             return increment_type
-        print(styles.ERROR("Invalid input. Please choose 'major', 'minor', 'patch', or 'post'"))
+        print(
+            styles.ERROR(
+                "Invalid input. Please choose 'major', 'minor', 'patch', or 'post'"
+            )
+        )
 
 
-def check_version_consistency(files: List[Path], quiet: bool = False) -> str:
+def check_version_consistency(files: list[Path], quiet: bool = False) -> str:
     """Check if all files have the same version number."""
     versions = {}
     for file_path in files:
@@ -221,7 +229,9 @@ def check_version_consistency(files: List[Path], quiet: bool = False) -> str:
             version = get_current_version(file_path)
             versions[str(file_path)] = version
         except Exception as e:
-            raise ValueError(styles.ERROR(f"Failed to get version from {file_path}: {e}"))
+            raise ValueError(
+                styles.ERROR(f"Failed to get version from {file_path}: {e}")
+            )
 
     if not versions:
         raise ValueError(styles.ERROR("No version information found in any files"))
@@ -234,12 +244,16 @@ def check_version_consistency(files: List[Path], quiet: bool = False) -> str:
         raise ValueError(styles.ERROR(error_msg))
 
     if not quiet:
-        print(styles.SUCCESS(f"All files have consistent version: {list(unique_versions)[0]}"))
+        print(
+            styles.SUCCESS(
+                f"All files have consistent version: {list(unique_versions)[0]}"
+            )
+        )
 
     return list(unique_versions)[0]
 
 
-def rollback_files(files: List[Path], quiet: bool = False) -> None:
+def rollback_files(files: list[Path], quiet: bool = False) -> None:
     """Roll back version by decrementing the version number."""
     if not quiet:
         print(styles.INFO("Rolling back version..."))
@@ -249,8 +263,11 @@ def rollback_files(files: List[Path], quiet: bool = False) -> None:
         previous_version = get_version_decrement(current_version)
 
         if not quiet:
-            print(styles.INFO(
-                f"Rolling back from {styles.VERSION_OLD(current_version)} to {styles.VERSION_NEW(previous_version)}"))
+            print(
+                styles.INFO(
+                    f"Rolling back from {styles.VERSION_OLD(current_version)} to {styles.VERSION_NEW(previous_version)}"
+                )
+            )
 
         for file_path in files:
             update_version_in_file(file_path, current_version, previous_version)
@@ -262,16 +279,20 @@ def rollback_files(files: List[Path], quiet: bool = False) -> None:
         raise ValueError(styles.ERROR(f"Failed to rollback version: {e}"))
 
 
-def update_version(root_dir: Path, increment_type: Optional[str] = None, quiet: bool = False,
-                   rollback: bool = False) -> str:
+def update_version(
+    root_dir: Path,
+    increment_type: str | None = None,
+    quiet: bool = False,
+    rollback: bool = False,
+) -> str:
     """Update version in all relevant files.
-    
+
     Args:
         root_dir: Project root directory containing version files
         increment_type: Type of version increment ('major', 'minor', 'patch')
         quiet: If True, suppress output messages
         rollback: If True, rollback to previous version
-        
+
     Returns:
         str: New version number, or empty string if rollback
     """
@@ -282,7 +303,9 @@ def update_version(root_dir: Path, increment_type: Optional[str] = None, quiet: 
     if not root_dir.exists():
         raise FileNotFoundError(styles.ERROR(f"Directory not found: {root_dir}"))
 
-    files_to_update = [root_dir / file for file in common_files if (root_dir / file).exists()]
+    files_to_update = [
+        root_dir / file for file in common_files if (root_dir / file).exists()
+    ]
     validate_files(files_to_update, quiet)
 
     if rollback:
@@ -325,12 +348,18 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Version management tool for Python projects. Updates or rolls back version numbers in common project files."
     )
-    parser.add_argument("-t", "--type", choices=["major", "minor", "patch", "post"],
-                        help="Type of version increment")
-    parser.add_argument("-q", "--quiet", action="store_true",
-                        help="Suppress output messages")
-    parser.add_argument("-r", "--rollback", action="store_true",
-                        help="Rollback to previous version")
+    parser.add_argument(
+        "-t",
+        "--type",
+        choices=["major", "minor", "patch", "post"],
+        help="Type of version increment",
+    )
+    parser.add_argument(
+        "-q", "--quiet", action="store_true", help="Suppress output messages"
+    )
+    parser.add_argument(
+        "-r", "--rollback", action="store_true", help="Rollback to previous version"
+    )
     return parser.parse_args()
 
 
