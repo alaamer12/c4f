@@ -1,5 +1,5 @@
 """Shared styling for CLI scripts."""
-from typing import Optional
+
 
 from colorama import Fore, Style, init
 
@@ -9,6 +9,7 @@ init()
 
 class Icons:
     """Unicode icons for CLI output."""
+
     CHECK = "✓"
     CROSS = "✗"
     WARNING = "⚠"
@@ -29,6 +30,7 @@ class Icons:
 
 class Styles:
     """Text styles for CLI output."""
+
     # Headers
     HEADER = lambda text: f"\n{Fore.CYAN}{Style.BRIGHT}{text}{Style.RESET_ALL}"
     SUBHEADER = lambda text: f"{Fore.BLUE}{text}{Style.RESET_ALL}"
@@ -52,11 +54,13 @@ class Styles:
     VERSION_NEW = lambda text: f"{Fore.GREEN}New version: {text}{Style.RESET_ALL}"
 
     # Changelog
-    CHANGELOG_SECTION = lambda text: f"{Fore.MAGENTA}{Icons.PENCIL} {text}{Style.RESET_ALL}"
+    CHANGELOG_SECTION = (
+        lambda text: f"{Fore.MAGENTA}{Icons.PENCIL} {text}{Style.RESET_ALL}"
+    )
     CHANGELOG_ENTRY = lambda text: f"{Fore.WHITE}{Icons.BULLET} {text}{Style.RESET_ALL}"
 
 
-def print_header(text: str, subtext: Optional[str] = None) -> None:
+def print_header(text: str, subtext: str | None = None) -> None:
     """Print a formatted header with optional subtext."""
     print(Styles.HEADER(text))
     if subtext:
