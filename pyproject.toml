@@ -115,7 +115,8 @@ markers = [
 ]
 filterwarnings = [
     "ignore::DeprecationWarning:g4f.requests.aiohttp:34",
-    "ignore::DeprecationWarning:aiohttp.client:1425"
+    "ignore::DeprecationWarning:aiohttp.client:1425",
+    "ignore:Error handling file change:UserWarning:tests.test_subprocess"
 ]
 
 [tool.coverage.run]
