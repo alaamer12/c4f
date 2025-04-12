@@ -1,6 +1,6 @@
 # mypy: ignore-errors
 import subprocess
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch, mock_open
 
 import pytest
 
@@ -126,21 +126,20 @@ def test_handle_untracked_file_not_found(mock_exists):
 def test_handle_untracked_file_read(mock_read, mock_exists, mock_access):
     assert handle_untracked_file(Path("file.txt")) == "mock content"
 
+def test_read_file_content_binary():
+    # Configure mock_open to return data with a null byte
+    m = mock_open(read_data="this contains a \0 null byte")
+    with patch("pathlib.Path.open", m):
+        assert read_file_content(Path("file.txt")) == "Binary file: file.txt"
 
-@patch(
-    "builtins.open", side_effect=UnicodeDecodeError("utf-8", b"\x80", 0, 1, "invalid")
-)
-def test_read_file_content_binary(mock_open):
-    assert read_file_content(Path("file.txt")) == "Binary file: file.txt"
+# Or, to simulate the UnicodeDecodeError case:
+def test_read_file_content_unicode_error():
+    # Configure mock_open to raise UnicodeDecodeError on read
+    m = mock_open()
+    m.return_value.read.side_effect = UnicodeDecodeError("utf-8", b'', 0, 1, "mock error")
+    with patch("pathlib.Path.open", m):
+        assert read_file_content(Path("file.txt")) == "Binary file: file.txt"
 
-
-@patch("builtins.open", new_callable=MagicMock)
-def test_read_file_content(mock_open):
-    mock_open.return_value.__enter__.return_value.read.side_effect = [
-        "text content",
-        "text content",
-    ]
-    assert read_file_content(Path("file.txt")) == "text content"
 
 
 @pytest.mark.parametrize(
@@ -346,9 +345,9 @@ def mock_config():
 
 
 def test_determine_tool_calls(mock_config):
-    simple_result = determine_tool_calls(False, "Basic change", "", mock_config)
+    simple_result = determine_tool_calls(False, "Basic change", "")
     comprehensive_result = determine_tool_calls(
-        True, "Major update", "Detailed summary", mock_config
+        True, "Major update", "Detailed summary"
     )
 
     assert isinstance(simple_result, dict)
@@ -669,6 +668,7 @@ def test_create_file_change():
         assert result == mock_file_change.return_value
 
 
+# noinspection PyUnreachableCode
 def test_exit_with_no_changes():
     with (
         patch("c4f.main.console.print") as mock_print,

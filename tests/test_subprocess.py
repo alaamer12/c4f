@@ -1197,9 +1197,7 @@ class TestProcessResourceMonitor:
         """Test _check_resource_limits method when limits are not exceeded."""
         mock_psutil_process = MagicMock()
         mock_psutil_process.cpu_percent.return_value = 5.0
-        mock_psutil_process.memory_info.return_value = MagicMock(
-            rss=512 * 1024
-        )  # 512KB
+        mock_psutil_process.memory_info.return_value = MagicMock(rss=512 * 1024)
 
         # Should return False
         assert (
@@ -1282,11 +1280,11 @@ class TestProcessResourceMonitor:
         # Create mock processes
         mock_process1 = MagicMock()
         mock_process1.cpu_percent.return_value = 5.0
-        mock_process1.memory_info.return_value = MagicMock(rss=512 * 1024)  # 512KB
+        mock_process1.memory_info.return_value = MagicMock(rss=512 * 1024)
 
         mock_process2 = MagicMock()
         mock_process2.cpu_percent.return_value = 15.0  # Exceeds CPU limit
-        mock_process2.memory_info.return_value = MagicMock(rss=512 * 1024)  # 512KB
+        mock_process2.memory_info.return_value = MagicMock(rss=512 * 1024)
 
         # Create a list of processes
         processes = [mock_process1, mock_process2]
@@ -1437,10 +1435,10 @@ class TestSecureSubprocessTermination:
         # Should not raise any exceptions
         termination_handler.terminate_process_and_children(mock_process)
 
-        # Verify logger.error was called
+        # Verify logger.exception was called
         with patch("c4f.utils.logger") as mock_logger:
             termination_handler.terminate_process_and_children(mock_process)
-            mock_logger.error.assert_called_once()
+            mock_logger.exception.assert_called_once()
 
 
 # Integration tests that run actual processes
@@ -1621,6 +1619,10 @@ class TestEdgeCases:
 
         # Create a mock psutil.Process
         mock_psutil_process = MagicMock()
+        # Configure cpu_percent to return a float
+        mock_psutil_process.cpu_percent.return_value = 5.0
+        # Configure memory_info to return a mock with an integer rss attribute
+        mock_psutil_process.memory_info.return_value = MagicMock(rss=512 * 1024)
 
         # Monitor the process tree
         monitor._monitor_process_tree(mock_psutil_process)
