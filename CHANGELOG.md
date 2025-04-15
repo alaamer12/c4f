@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.2] - 2025-04-12
+## [1.1.2] - 2025-04-15
 
 ### Changed
 - Enforced stricter static typing across the codebase.
@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Resolved bugs related to subprocess resource monitoring.
 
-## [1.1.1] - 2025-04-10
+## [1.1.1] - 2025-04-12
 
 ### Added
 - More robust testing framework with comprehensive test cases
