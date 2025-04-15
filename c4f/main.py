@@ -59,7 +59,7 @@ YELLOW_FORMAT_THRESHOLD = 50
 
 
 def run_git_command(
-        command: list[str], timeout: int | None = None
+    command: list[str], timeout: int | None = None
 ) -> tuple[str, str, int]:
     """Run a git command and return its output.
 
@@ -109,7 +109,7 @@ def handle_git_status_error(stderr: str) -> None:
 
 
 def process_untracked_file(
-        status: STATUS_TYPE, file_path: str
+    status: STATUS_TYPE, file_path: str
 ) -> List[Tuple[STATUS_TYPE, str]]:
     """Process untracked files and directories.
 
@@ -438,7 +438,7 @@ def get_diff_patterns() -> dict[str, str]:
     }
 
 
-def check_patterns(text: str, patterns: dict) -> str | None:
+def check_patterns(text: str, patterns: dict[Optional[str], str]) -> str | None:
     """Check if text matches any pattern in the given dictionary."""
     for type_name, pattern in patterns.items():
         if re.search(pattern, text, re.I):
@@ -510,18 +510,18 @@ def is_corrupted_message(message: Optional[str], config: Config) -> bool:
     format, or doesn't have brackets when required.
     """
     return (
-            not message
-            or not is_conventional_type(message)
-            or not is_conventional_type_with_brackets(message, config)
+        not message
+        or not is_conventional_type(message)
+        or not is_conventional_type_with_brackets(message, config)
     )
 
 
 def get_formatted_message(
-        combined_context: str,
-        tool_calls: Dict[str, str],
-        changes: List[FileChange],
-        total_diff_lines: int,
-        config: Config,
+    combined_context: str,
+    tool_calls: Dict[str, str],
+    changes: List[FileChange],
+    total_diff_lines: int,
+    config: Config,
 ) -> Optional[str]:
     """Get a formatted commit message using the model.
 
@@ -608,7 +608,7 @@ def purify_commit_message_introduction(message: str) -> str:
 
     for prefix in prefixes_to_remove:
         if message.lower().startswith(prefix):
-            message = message[len(prefix):].strip()
+            message = message[len(prefix) :].strip()
 
     return message
 
@@ -654,14 +654,14 @@ def purify_disclaimers(message: str) -> str:
     filtered_lines = []
     for line in lines:
         if any(
-                x in line.lower()
-                for x in [
-                    "let me know if",
-                    "please review",
-                    "is this helpful",
-                    "hope this",
-                    "i've followed",
-                ]
+            x in line.lower()
+            for x in [
+                "let me know if",
+                "please review",
+                "is this helpful",
+                "hope this",
+                "i've followed",
+            ]
         ):
             break
         filtered_lines.append(line)
@@ -703,9 +703,9 @@ def purify_message(message: str | None) -> str | None:
 
 
 def determine_tool_calls(
-        is_comprehensive: bool,
-        combined_text: str,
-        diffs_summary: str = "",
+    is_comprehensive: bool,
+    combined_text: str,
+    diffs_summary: str = "",
 ) -> dict[str, Any]:
     """Determine the appropriate tool calls based on the comprehensiveness of the change.
 
@@ -746,7 +746,7 @@ def create_simple_tool_call(combined_text: str) -> dict[str, Any]:
 
 
 def create_comprehensive_tool_call(
-        combined_text: str, diffs_summary: str
+    combined_text: str, diffs_summary: str
 ) -> dict[str, Any]:
     """Create a tool call for generating a comprehensive commit message.
 
@@ -773,11 +773,11 @@ def create_comprehensive_tool_call(
 
 
 def attempt_generate_message(
-        combined_context: str,
-        tool_calls: dict[str, Any],
-        changes: list[FileChange],
-        total_diff_lines: int,
-        config: Config,
+    combined_context: str,
+    tool_calls: dict[str, Any],
+    changes: list[FileChange],
+    total_diff_lines: int,
+    config: Config,
 ) -> str | None:
     """Attempt to generate a commit message using the model.
 
@@ -788,7 +788,7 @@ def attempt_generate_message(
 
 
 def handle_comprehensive_message(
-        message: str | None, changes: list[FileChange], config: Config
+    message: str | None, changes: list[FileChange], config: Config
 ) -> Optional[str]:
     """Handle a comprehensive commit message, with user interaction for short messages.
 
@@ -888,7 +888,7 @@ def generate_diff_summary(changes: list[FileChange], config: Config) -> str:
 
 
 def determine_prompt(
-        combined_text: str, changes: list[FileChange], diff_lines: int, config: Config
+    combined_text: str, changes: list[FileChange], diff_lines: int, config: Config
 ) -> str:
     """Determine the appropriate prompt based on the size of changes.
 
@@ -925,7 +925,7 @@ def generate_simple_prompt(combined_text: str, config: Config) -> str:
 
 
 def generate_comprehensive_prompt(
-        combined_text: str, diffs_summary: str, config: Config
+    combined_text: str, diffs_summary: str, config: Config
 ) -> str:
     """Generate a prompt for a comprehensive commit message.
 
@@ -969,7 +969,7 @@ def generate_comprehensive_prompt(
 
 
 def model_prompt(
-        prompt: str, tool_calls: dict[str, Any], config: Config
+    prompt: str, tool_calls: dict[str, Any], config: Config
 ) -> Optional[str]:
     """Send a prompt to the model and get a response.
 
@@ -987,7 +987,7 @@ def model_prompt(
 
 
 def get_model_response(
-        prompt: str, tool_calls: dict[str, Any], config: Config
+    prompt: str, tool_calls: dict[str, Any], config: Config
 ) -> str | None:
     """Get a response from the model.
 
@@ -1025,27 +1025,27 @@ def get_model_response(
 
 
 def execute_with_progress(
-        func: Callable[..., Optional[str]], *args: object
+    func: Callable[..., Optional[str]], *args: object
 ) -> Optional[str]:
     """Execute a function with a progress indicator.
 
     Shows a spinner while waiting for the function to complete.
     """
     with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
     ) as progress:
         task = progress.add_task("Waiting for model response...", total=None)
         return execute_with_timeout(func, progress, task, *args)
 
 
 def execute_with_timeout(
-        func: Callable[..., Optional[str]],
-        progress: Progress,
-        task: TaskID,
-        *args: object,
-        timeout: Optional[int] = None,
+    func: Callable[..., Optional[str]],
+    progress: Progress,
+    task: TaskID,
+    *args: object,
+    timeout: Optional[int] = None,
 ) -> Optional[str]:
     """Execute a function with a timeout.
 
@@ -1114,11 +1114,11 @@ def commit_changes(files: list[str], message: str) -> None:
     Stages the files, commits them with the provided message, and displays the result.
     """
     with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            console=console,
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
     ) as progress:
         # Stage files
         stage_files(files, progress)
@@ -1358,7 +1358,7 @@ def get_valid_changes() -> Optional[List[FileChange]]:
 
 
 def process_changed_files(
-        changed_files: List[Tuple[STATUS_TYPE, str]],
+    changed_files: List[Tuple[STATUS_TYPE, str]],
 ) -> List[FileChange]:
     """Process a list of changed files.
 
@@ -1399,7 +1399,7 @@ def create_progress_tasks(progress: Progress, total: int) -> Tuple[TaskID, TaskI
 
 
 def process_single_file(
-        status: STATUS_TYPE, file_path: str, progress: Progress, diff_task: TaskID
+    status: STATUS_TYPE, file_path: str, progress: Progress, diff_task: TaskID
 ) -> Optional[FileChange]:
     """Process a single changed file.
 
@@ -1436,7 +1436,7 @@ def exit_with_no_changes() -> NoReturn:
 
 
 def process_change_group(
-        group: list[FileChange], config: Config, accept_all: bool = False
+    group: list[FileChange], config: Config, accept_all: bool = False
 ) -> bool:
     """Process a group of related file changes.
 
@@ -1509,7 +1509,7 @@ def handle_user_response(response: str, group: list[FileChange], message: str) -
 
 
 def do_group_commit(
-        group: list[FileChange], message: str, accept_all: bool = False
+    group: list[FileChange], message: str, accept_all: bool = False
 ) -> bool:
     """Commit a group of changes and return whether to accept all future commits.
 
