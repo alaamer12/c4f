@@ -149,7 +149,7 @@ show_missing = true
 target-version = "py311"
 line-length = 88
 indent-width = 4
-exclude = ["tests/*", "scripts/*"]  # Exclude all files in tests directory
+exclude = ["tests/*", "scripts/*", "docs/*", "examples/*", "demos/*"]  # Exclude all files in tests directory
 
 
 [tool.ruff.lint]
@@ -217,3 +217,33 @@ section-order = ["future", "standard-library", "third-party", "first-party", "lo
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+strict_optional = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "scripts.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "demos.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "examples.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "c4f._progress"
+ignore_errors = true
