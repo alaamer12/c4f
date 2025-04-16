@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from c4f.utils import FileChange
 
+__all__ = ["ProcessorQueue"]
+
 
 class ProcessorQueue:
     """Thread-safe queue for managing commit message generation tasks.
@@ -91,7 +93,7 @@ class ProcessorQueue:
             self._event.set()
 
     def get_result(
-        self, group_key: Tuple[str, ...], timeout: Optional[float] = None
+            self, group_key: Tuple[str, ...], timeout: Optional[float] = None
     ) -> Optional[str]:
         """Get the result for a group.
 

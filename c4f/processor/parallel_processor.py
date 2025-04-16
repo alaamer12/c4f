@@ -12,20 +12,24 @@ from rich.progress import (
     BarColumn,
     Progress,
     SpinnerColumn,
+    TaskID,
     TaskProgressColumn,
     TextColumn,
 )
 
-from c4f.base import Processor
 from c4f.config import Config
 from c4f.main import (
     display_commit_preview,
     do_group_commit,
     get_valid_user_response,
     handle_user_response,
+    process_change_group,
 )
+from c4f.processor.base import Processor
 from c4f.processor.processor_queue import ProcessorQueue
 from c4f.utils import FileChange, console
+
+__all__ = ["ParallelProcessor", "MessageGenerator"]
 
 
 class MessageGenerator:
@@ -98,14 +102,32 @@ class ParallelProcessor(Processor):
         Returns:
             Dict[Tuple[str, ...], Optional[str]]: Dictionary mapping group keys to generated messages.
         """
+        self._announce_pre_generation()
+        self._queue_all_groups(groups)
+        self._process_groups_in_parallel(len(groups))
+        return self._collect_results()
+
+    def _announce_pre_generation(self) -> None:
+        """Announce the start of pre-generating commit messages."""
         self.console.print(
             "[bold blue]Pre-generating commit messages for all groups...[/bold blue]"
         )
 
-        # Add all groups to the queue
+    def _queue_all_groups(self, groups: List[List[FileChange]]) -> None:
+        """Add all groups to the processing queue.
+        
+        Args:
+            groups: List of groups of file changes.
+        """
         for group in groups:
             self.queue.add_group(group)
 
+    def _process_groups_in_parallel(self, total_groups: int) -> None:
+        """Process all queued groups in parallel with a progress bar.
+        
+        Args:
+            total_groups: Total number of groups to process.
+        """
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -113,31 +135,75 @@ class ParallelProcessor(Processor):
             TaskProgressColumn(),
             console=self.console,
         ) as progress:
-            task = progress.add_task("Generating messages...", total=len(groups))
+            task = progress.add_task("Generating messages...", total=total_groups)
+            self._execute_parallel_tasks(total_groups, progress, task)
 
-            # Create a thread pool with the configured number of workers
-            with concurrent.futures.ThreadPoolExecutor(
+    def _execute_parallel_tasks(
+            self,
+            total_tasks: int,
+            progress: Progress,
+            task_id: TaskID
+    ) -> None:
+        """Execute tasks in parallel using a thread pool.
+        
+        Args:
+            total_tasks: Total number of tasks to execute.
+            progress: Progress bar instance.
+            task_id: ID of the progress bar task.
+        """
+        with concurrent.futures.ThreadPoolExecutor(
                 max_workers=self.config.MAX_WORKERS
-            ) as executor:
-                # Track futures for all submitted tasks
-                futures = []
+        ) as executor:
+            futures = self._submit_tasks(executor, total_tasks)
+            self._process_completed_futures(futures, progress, task_id)
 
-                # Submit tasks for all groups
-                for _ in range(len(groups)):
-                    future = executor.submit(self._process_next_group_from_queue)
-                    futures.append(future)
+    def _submit_tasks(
+            self,
+            executor: concurrent.futures.ThreadPoolExecutor,
+            total_tasks: int
+    ) -> List[concurrent.futures.Future]:
+        """Submit tasks to the executor.
+        
+        Args:
+            executor: ThreadPoolExecutor instance.
+            total_tasks: Number of tasks to submit.
+            
+        Returns:
+            List of futures for submitted tasks.
+        """
+        futures = []
+        for _ in range(total_tasks):
+            future = executor.submit(self._process_next_group_from_queue)
+            futures.append(future)
+        return futures
 
-                # Wait for all futures to complete
-                for future in concurrent.futures.as_completed(futures):
-                    try:
-                        # Each completed future should return a group key
-                        future.result()
-                        progress.advance(task)
-                    except Exception as e:
-                        self.console.print(f"[red]Error in worker thread: {e!s}[/red]")
-                        progress.advance(task)
+    def _process_completed_futures(
+            self,
+            futures: List[concurrent.futures.Future],
+            progress: Progress,
+            task_id: TaskID
+    ) -> None:
+        """Process completed futures and update progress.
+        
+        Args:
+            futures: List of futures to process.
+            progress: Progress bar instance.
+            task_id: ID of the progress bar task.
+        """
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+                progress.advance(task_id)
+            except Exception as e:
+                self.console.print(f"[red]Error in worker thread: {e!s}[/red]")
+                progress.advance(task_id)
 
-        # Get all results from the queue
+    def _collect_results(self) -> Dict[Tuple[str, ...], Optional[str]]:
+        """Collect all results from the queue.
+        
+        Returns:
+            Dictionary mapping group keys to generated messages.
+        """
         self.messages = self.queue.get_all_results()
         return self.messages
 
@@ -172,51 +238,69 @@ class ParallelProcessor(Processor):
     def process_group_with_message(
         self, group: List[FileChange], message: Optional[str]
     ) -> bool:
-        """Process a group with a pre-generated message.
+        """Process a group with a pre-generated message."""
 
+        if message is None:
+            return self._handle_missing_message(group)
+
+        return self._process_with_existing_message(group, message)
+
+    def _handle_missing_message(self, group: List[FileChange]) -> bool:
+        """Handle the case when no pre-generated message is available.
+        
+        Args:
+            group: List of file changes to process.
+            
+        Returns:
+            bool: Result from the fallback processing.
+        """
+
+        self.console.print(
+            "[yellow]No pre-generated message available, falling back to normal processing[/yellow]"
+        )
+        return process_change_group(group, self.config)
+
+    def _process_with_existing_message(
+            self, group: List[FileChange], message: str, accept_all: bool = False
+    ) -> bool:
+        """Process a group with an existing pre-generated message.
+        
         Args:
             group: List of file changes to process.
             message: Pre-generated commit message.
-
+            accept_all: Whether to automatically accept the commit.
+            
         Returns:
             bool: True if the user chose to accept all future commits.
         """
-        from c4f.main import process_change_group
+        rendered_message = self._render_markdown_message(message)
+        display_commit_preview(rendered_message)
 
-        if message is None:
-            # If no message was generated, fall back to normal processing
-            self.console.print(
-                "[yellow]No pre-generated message available, falling back to normal processing[/yellow]"
-            )
-            return process_change_group(group, self.config)
+        if accept_all:
+            return do_group_commit(group, message, True)
 
-        # Create a modified version of process_change_group that uses the pre-generated message
-        def process_with_message(
-            group: List[FileChange], accept_all: bool = False
-        ) -> bool:
-            # Style Message
-            from rich.markdown import Markdown
+        response = get_valid_user_response()
+        return handle_user_response(response, group, message)
 
-            md = Markdown(message)
+    def _render_markdown_message(self, message: str) -> str:
+        """Render a markdown message to a string.
+        
+        Args:
+            message: Markdown message to render.
+            
+        Returns:
+            str: Rendered markdown as a string.
+        """
+        from rich.markdown import Markdown
 
-            # Capture the rendered Markdown output
-            with self.console.capture() as capture:
-                self.console.print(md, end="")  # Ensure no extra newline
-            rendered_message = capture.get()
+        md = Markdown(message)
 
-            display_commit_preview(
-                rendered_message
-            )  # Pass the properly rendered string
+        with self.console.capture() as capture:
+            self.console.print(md, end="")  # Ensure no extra newline
 
-            if accept_all:
-                return do_group_commit(group, message, True)
+        return capture.get()
 
-            response = get_valid_user_response()
-            return handle_user_response(response, group, message)
-
-        return process_with_message(group)
-
-    def process_all_groups(self, groups: List[List[FileChange]]) -> None:
+    def process_groups(self, groups: List[List[FileChange]]) -> None:
         """Process all groups with pre-generated messages.
 
         Args:
@@ -228,37 +312,89 @@ class ParallelProcessor(Processor):
         # Process each group with its pre-generated message
         accept_all = False
         for group in groups:
-            if self._stop_event.is_set():
-                self.console.print(
-                    "[yellow]Processing stopped by user or error[/yellow]"
-                )
+            if self._check_if_stopped():
                 break
 
-            group_key = tuple(str(change.path) for change in group)
+            group_key = self._get_group_key(group)
             message = self.messages.get(group_key)
 
             if accept_all:
-                # If user chose to accept all, just commit without showing the message
-
-                do_group_commit(
-                    group,
-                    message
-                    or f"{group[0].type}: update {' '.join(str(c.path.name) for c in group)}",
-                    True,
-                )
+                accept_all = self._process_with_auto_accept(group, message)
             else:
-                # Process the group with its pre-generated message
-                try:
-                    accept_all = self.process_group_with_message(group, message)
-                except KeyboardInterrupt:
-                    self.console.print(
-                        "[yellow]Processing interrupted by user[/yellow]"
-                    )
-                    self._stop_event.set()
-                    break
-                except Exception as e:
-                    self.console.print(f"[red]Error processing group: {e!s}[/red]")
-                    # Continue with next group without stopping completely
+                accept_all = self._process_with_user_confirmation(group, message)
+
+    def _check_if_stopped(self) -> bool:
+        """Check if processing has been stopped.
+        
+        Returns:
+            bool: True if processing should stop, False otherwise.
+        """
+        if self._stop_event.is_set():
+            self.console.print(
+                "[yellow]Processing stopped by user or error[/yellow]"
+            )
+            return True
+        return False
+
+    @staticmethod
+    def _get_group_key(group: List[FileChange]) -> Tuple[str, ...]:
+        """Get the key for a group of file changes."""
+        return tuple(str(change.path) for change in group)
+
+    @staticmethod
+    def _process_with_auto_accept(group: List[FileChange], message: Optional[str]) -> bool:
+        """Process a group with automatic acceptance.
+        
+        Args:
+            group: List of file changes to process.
+            message: Pre-generated commit message.
+            
+        Returns:
+            bool: True to continue auto-accepting commits.
+        """
+        # If user chose to accept all, just commit without showing the message
+        fallback_message = f"{group[0].type}: update {' '.join(str(c.path.name) for c in group)}"
+        do_group_commit(
+            group,
+            message or fallback_message,
+            True,
+        )
+        return True
+
+    def _process_with_user_confirmation(self, group: List[FileChange], message: Optional[str]) -> bool:
+        """Process a group with user confirmation.
+        
+        Args:
+            group: List of file changes to process.
+            message: Pre-generated commit message.
+            
+        Returns:
+            bool: True if user chose to accept all future commits.
+        """
+        try:
+            return self.process_group_with_message(group, message)
+        except KeyboardInterrupt:
+            self._handle_keyboard_interrupt()
+            return False
+        except Exception as e:
+            self._handle_processing_error(e)
+            return False
+
+    def _handle_keyboard_interrupt(self) -> None:
+        """Handle keyboard interrupt during processing."""
+        self.console.print(
+            "[yellow]Processing interrupted by user[/yellow]"
+        )
+        self._stop_event.set()
+
+    def _handle_processing_error(self, error: Exception) -> None:
+        """Handle errors during group processing.
+        
+        Args:
+            error: The exception that occurred.
+        """
+        self.console.print(f"[red]Error processing group: {error!s}[/red]")
+        # Continue with next group without stopping completely
 
     def stop(self) -> None:
         """Stop all processing."""
