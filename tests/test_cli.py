@@ -796,7 +796,8 @@ def test_create_config_from_args():
     """Test create_config_from_args creates a Config object with correct values."""
     # Create a mock args object
     args = argparse.Namespace(
-        force_brackets=True, timeout=30, attempts=5, model="gpt-4"
+        force_brackets=True, timeout=30, attempts=5, model="gpt-4",
+        icon=False, ascii_only=False
     )
 
     # Create config from args

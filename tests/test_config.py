@@ -19,6 +19,7 @@ class TestConfig:
         config = Config()
         assert config.is_valid()
         assert config.force_brackets is False
+        assert config.icon is False
         assert config.prompt_threshold == 80
         assert config.fallback_timeout == 15.0
         assert config.min_comprehensive_length == 50
@@ -30,6 +31,7 @@ class TestConfig:
         """Test creating a custom configuration with valid values."""
         config = Config(
             force_brackets=True,
+            icon=True,
             prompt_threshold=100,
             fallback_timeout=15.0,
             min_comprehensive_length=60,
@@ -39,12 +41,42 @@ class TestConfig:
         )
         assert config.is_valid()
         assert config.force_brackets is True
+        assert config.icon is True
         assert config.prompt_threshold == 100
         assert config.fallback_timeout == 15.0
         assert config.min_comprehensive_length == 60
         assert config.attempt == 5
         assert config.diff_max_length == 150
         assert config.model == g4f.models.gpt_4o
+
+    def test_icon_config(self):
+        """Test the icon configuration option."""
+        # Default should be False
+        config = Config()
+        assert config.icon is False
+        
+        # Setting to True should work
+        config = Config(icon=True)
+        assert config.icon is True
+        
+        # Setting to False explicitly should work
+        config = Config(icon=False)
+        assert config.icon is False
+
+    @pytest.mark.parametrize(
+        "invalid_value,expected_error",
+        [
+            (None, "icon must be a boolean value"),
+            (1, "icon must be a boolean value"),
+            ("True", "icon must be a boolean value"),
+            ([], "icon must be a boolean value"),
+        ],
+    )
+    def test_invalid_icon(self, invalid_value, expected_error):
+        """Test validation of icon with invalid values."""
+        with pytest.raises(ValueError) as excinfo:
+            Config(icon=invalid_value)
+        assert f"Invalid configuration: {expected_error}" in str(excinfo.value)
 
     def test_model_as_string(self):
         """Test setting the model as a string."""
@@ -178,6 +210,7 @@ class TestConfig:
         with pytest.raises(ValueError) as excinfo:
             Config(
                 force_brackets="True",
+                icon="True",
                 prompt_threshold=5,
                 fallback_timeout=0.5,
                 min_comprehensive_length=-1,
@@ -232,6 +265,7 @@ class TestConfig:
         assert isinstance(default_config, Config)
         assert default_config.is_valid()
         assert default_config.force_brackets is False
+        assert default_config.icon is False
         assert default_config.prompt_threshold == 80
         assert default_config.fallback_timeout == 15.0
         assert default_config.min_comprehensive_length == 50
@@ -267,6 +301,7 @@ class TestConfig:
         repr_str = repr(config)
         assert "Config(" in repr_str
         assert "force_brackets=False" in repr_str
+        assert "icon=False" in repr_str
         assert "prompt_threshold=80" in repr_str
         assert "fallback_timeout=15.0" in repr_str
         assert "min_comprehensive_length=50" in repr_str
@@ -283,15 +318,20 @@ class TestConfig:
         config3 = Config(force_brackets=True)
         assert config1 != config3
 
+        config4 = Config(icon=True)
+        assert config1 != config4
+        assert config3 != config4
+
     def test_config_copy(self):
         """Test copying a Config instance."""
         import copy
 
-        original = Config(force_brackets=True, prompt_threshold=100)
+        original = Config(force_brackets=True, icon=True, prompt_threshold=100)
         copied = copy.copy(original)
 
         assert copied is not original
         assert copied.force_brackets == original.force_brackets
+        assert copied.icon == original.icon
         assert copied.prompt_threshold == original.prompt_threshold
         assert copied.fallback_timeout == original.fallback_timeout
         assert copied.min_comprehensive_length == original.min_comprehensive_length

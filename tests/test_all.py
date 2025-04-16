@@ -1,11 +1,30 @@
 # mypy: ignore-errors
 import subprocess
+import tempfile
+import time
+from unittest import mock
 from unittest.mock import ANY, MagicMock, patch, mock_open
-
+import uuid
 import pytest
 
 from c4f.main import *
 from c4f.utils import FileChange
+
+@pytest.fixture
+def empty_file():
+    """Create a temporary empty file for testing."""
+    with tempfile.NamedTemporaryFile(delete=False) as temp:
+        temp_path = Path(temp.name)
+
+    # Ensure the file exists but is empty
+    with open(temp_path, 'w'):
+        pass
+
+    yield temp_path
+
+    # Clean up
+    if temp_path.exists():
+        os.unlink(temp_path)
 
 
 @pytest.fixture
@@ -887,19 +906,32 @@ def test_handle_untracked_file_no_permission(mock_access):
 
 
 @patch("c4f.main.read_file_content", return_value="file content")
-def test_handle_untracked_file_success(mock_read):
-    path = Path("valid_file.txt")
+def test_handle_untracked_with_content_file_success(mock_read):
+    time.sleep(0.001)  # To Avoid name conflicting of fast running tests
+    fn = f"{uuid.uuid4()}.txt"
+    path = Path(fn)
     path.touch()  # Create the file
+    with path.open("w") as f:
+        f.write("file content")
     assert handle_untracked_file(path) == "file content"
+    path.unlink()  # Clean up
+
+@patch("c4f.main.read_file_content", return_value="")
+def test_handle_untracked_without_content_file_success(mock_read):
+    fn = f"{uuid.uuid4()}.txt"
+    path = Path(fn)
+    path.touch()  # Create the file
+    assert handle_untracked_file(path) == f"Empty file: {fn}"
     path.unlink()  # Clean up
 
 
 @patch("c4f.main.read_file_content", side_effect=Exception("Read error"))
 def test_handle_untracked_file_exception(mock_read):
-    path = Path("error_file.txt")
+    fn = f"error_{uuid.uuid1()}.txt"
+    path = Path(fn)
     try:
         path.touch()  # Create the file
-        expected_error = "Error: Read error"
+        expected_error = f"Empty file: {fn}"
         assert handle_untracked_file(path) == expected_error
         path.unlink()  # Clean up
     except PermissionError:
@@ -2207,7 +2239,9 @@ def test_handle_comprehensive_message_fallback():
             )
         ]
         result = handle_comprehensive_message("short message", changes, config)
-        assert result.startswith("feat: update")
+        # Updated assertion to handle both formats (with or without ASCII icon)
+        assert "feat: update" in result
+        assert "test.txt" in result
 
 
 # Test for handle_short_comprehensive_message with empty input
@@ -2324,3 +2358,72 @@ def test_get_model_response_none_response():
         config = MagicMock()
         result = get_model_response("test prompt", {}, config)
         assert result is None
+
+
+
+
+def test_process_single_file_with_empty_file(empty_file):
+    """Test that process_single_file correctly handles empty files."""
+    progress = Progress()
+    task = progress.add_task("Test", total=1)
+
+    # Mock the analyze_file_type function to return a predictable value
+    with mock.patch('c4f.main.analyze_file_type', return_value='feat'):
+        result = process_single_file('A', str(empty_file), progress, task)
+
+    assert result is not None
+    assert isinstance(result, FileChange)
+    assert result.path == empty_file
+    assert result.status == 'A'
+    assert "Empty file" in result.diff
+    assert result.type == 'feat'
+
+
+def test_create_file_change_with_empty_file(empty_file):
+    """Test that create_file_change correctly handles empty files."""
+    # Mock the analyze_file_type function to return a predictable value
+    with mock.patch('c4f.main.analyze_file_type', return_value='feat'):
+        with mock.patch('c4f.main.get_file_diff', return_value=''):
+            result = create_file_change('A', str(empty_file))
+
+    assert result is not None
+    assert isinstance(result, FileChange)
+    assert result.path == empty_file
+    assert result.status == 'A'
+    assert "Empty file" in result.diff
+    assert result.type == 'feat'
+
+
+def test_read_file_content_with_empty_file(empty_file):
+    """Test that read_file_content correctly identifies empty files."""
+    result = read_file_content(empty_file)
+
+    assert "Empty file" in result
+    assert str(empty_file) in result
+
+
+def test_handle_untracked_file_with_empty_file(empty_file):
+    """Test that handle_untracked_file correctly handles empty files."""
+    result = handle_untracked_file(empty_file)
+
+    assert "Empty file" in result
+    assert str(empty_file) in result
+
+
+def test_process_single_file_with_nonexistent_file():
+    """Test that process_single_file returns None for nonexistent files."""
+    progress = Progress()
+    task = progress.add_task("Test", total=1)
+
+    with mock.patch('c4f.main.get_file_diff', return_value=''):
+        result = process_single_file('A', 'nonexistent_file.txt', progress, task)
+
+    assert result is None
+
+
+def test_create_file_change_with_nonexistent_file():
+    """Test that create_file_change returns None for nonexistent files."""
+    with mock.patch('c4f.main.get_file_diff', return_value=''):
+        result = create_file_change('A', 'nonexistent_file.txt')
+
+    assert result is None
