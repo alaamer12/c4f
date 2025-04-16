@@ -32,6 +32,7 @@ A sophisticated Git commit message generator that uses AI to create meaningful, 
 - 🔄 Fallback mechanisms for reliability
 - 🎯 Automatic change type detection (feat, fix, docs, etc.)
 - 📊 Progress tracking and status display
+- 🚀 Optional emoji icons for commit types (✨ feat, 🐛 fix, etc.)
 
 ## Demo
 
@@ -111,7 +112,7 @@ The tool will:
 ### Command-line Options
 
 ```
-usage: c4f [-r PATH] [-m MODEL] [-a NUM] [-t SEC] [-f]
+usage: c4f [-r PATH] [-m MODEL] [-a NUM] [-t SEC] [-f] [-i] [-A]
 
 Intelligent Git Commit Message Generator
 
@@ -135,6 +136,8 @@ Formatting Options:
   Configure the commit message format
 
   -f, --force-brackets  Force conventional commit type with brackets (e.g., feat(scope): message)
+  -i, --icon            Add emoji icons to commit messages (e.g., ✨ feat: new feature)
+  -A, --ascii-only      Use ASCII alternatives instead of Unicode emojis for better terminal compatibility
 ```
 
 ### Examples
@@ -159,6 +162,16 @@ Force brackets in conventional commit format:
 c4f --force-brackets
 ```
 
+Enable emoji icons in commit messages:
+```bash
+c4f --icon
+```
+
+Use ASCII alternatives instead of Unicode emojis:
+```bash
+c4f --icon --ascii-only
+```
+
 Specify a different root directory:
 ```bash
 c4f --root /path/to/your/repo
@@ -171,17 +184,21 @@ c4f --root /path/to/your/repo
 - **Interactive Interface**: Displays changes in a formatted table and allows user interaction when needed
 - **Progress Tracking**: Shows real-time progress for file analysis and commit operations
 - **Fallback Mechanism**: Includes a fallback system if AI generation fails or times out
+- **Emoji Icons**: Optionally adds relevant emojis (✨, 🐛, etc.) or ASCII alternatives ([+], [!], etc.) based on change type to make commits more visually informative
+- **Terminal Compatibility**: Auto-detects terminal capabilities and uses ASCII alternatives in environments that don't support Unicode emojis
 
 ## Configuration
 
 Key configuration options available through command-line arguments:
 
-| Option             | Description                           | Default    |
-|--------------------|---------------------------------------|------------|
-| `--model`          | AI model to use                       | gpt-4-mini |
-| `--attempts`       | Number of message generation attempts | 3          |
-| `--timeout`        | Timeout in seconds for AI response    | 10         |
-| `--force-brackets` | Force brackets in conventional format | False      |
+| Option             | Description                                  | Default    |
+|--------------------|----------------------------------------------|------------|
+| `--model`          | AI model to use                              | gpt-4-mini |
+| `--attempts`       | Number of message generation attempts        | 3          |
+| `--timeout`        | Timeout in seconds for AI response           | 10         |
+| `--force-brackets` | Force brackets in conventional format        | False      |
+| `--icon`           | Add emoji icons to commit messages           | False      |
+| `--ascii-only`     | Use ASCII alternatives instead of Unicode    | False      |
 
 ## Requirements
 

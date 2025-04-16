@@ -5,16 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2025-04-18
+## [1.1.3] - 2025-04-18
 
 ### Added
-- New processing architecture with three distinct strategies:
-  - Sequential processing (original implementation)
-  - Parallel processing for concurrent commit handling
-  - Batch processing for optimized large-scale operations
-- Smart strategy selection system that automatically chooses the optimal processing method
-- Pre-generation of commit messages to reduce IO blocking time
-- Message caching system for improved performance in batch operations
+- New feature to force icon display in commit messages
+- ASCII-only mode for better terminal compatibility with `--ascii-only` flag
+
+### Fixed
+- Resolved issue with undetected empty files
+- Fixed handling of unstaged and undetected files
+- Fixed failing tests related to icon display in messages
+
+### Changed
+- Implemented smart fallback strategy for emojis with ASCII alternatives
+- Enhanced test suite with comprehensive coverage for icon display features
+- Improved terminal compatibility detection for better cross-platform experience
 
 ### Changed
 - Refactored processor implementations into self-contained, modular structures
