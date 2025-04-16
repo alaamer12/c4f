@@ -36,7 +36,7 @@ class Config:
     # Default values
     force_brackets: bool = False
     prompt_threshold: int = 80
-    fallback_timeout: float = 10.0
+    fallback_timeout: float = 15.0
     min_comprehensive_length: int = 50
     attempt: int = 3
     diff_max_length: int = 100
@@ -71,7 +71,24 @@ class Config:
         Returns:
             Optional[str]: Error message if validation fails, None otherwise.
         """
-        validation_rules = [
+        validation_rules = self._get_validation_rules()
+        # Check each validation rule and return the first error found
+        for condition, error_message in validation_rules:
+            if condition:
+                return error_message
+
+        return None
+
+    def is_valid(self) -> bool:
+        """Check if the configuration is valid.
+
+        Returns:
+            bool: True if the configuration is valid, False otherwise.
+        """
+        return self._validate() is None
+
+    def _get_validation_rules(self) -> list[tuple[bool, str]]:
+        return [
             (
                 not isinstance(self.force_brackets, bool),
                 "force_brackets must be a boolean value",
@@ -102,22 +119,11 @@ class Config:
                 not isinstance(self.diff_max_length, int) or self.diff_max_length < 0,
                 "diff_max_length must be a non-negative integer",
             ),
+            (
+                not (isinstance(self.model, (g4f.Model, str)) or self.model in g4f.models.__dict__.values()),
+                "model must be a g4f.Model object, a valid model from g4f.models, or a string",
+            ),
         ]
-
-        # Check each validation rule and return the first error found
-        for condition, error_message in validation_rules:
-            if condition:
-                return error_message
-
-        return None
-
-    def is_valid(self) -> bool:
-        """Check if the configuration is valid.
-
-        Returns:
-            bool: True if the configuration is valid, False otherwise.
-        """
-        return self._validate() is None
 
 
 # Default configuration instance
