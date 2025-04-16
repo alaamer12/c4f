@@ -12,6 +12,7 @@ Arguments:
     -a, --attempts NUM     Set the number of generation attempts [default: 3]
     -t, --timeout SEC      Set the fallback timeout in seconds [default: 10]
     -f, --force-brackets   Force conventional commit type with brackets [default: False]
+    -i, --icon             Add emoji icons to commit messages [default: False]
 """
 
 import argparse
@@ -468,7 +469,7 @@ def add_generation_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def add_formatting_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add arguments related to commit message formatting.
+    """Add formatting arguments to the parser.
 
     Args:
         parser (argparse.ArgumentParser): The argument parser to add the formatting arguments to.
@@ -483,6 +484,22 @@ def add_formatting_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Force conventional commit type with brackets (e.g., feat(scope): message)",
         dest="force_brackets",
+    )
+    
+    formatting_group.add_argument(
+        "-i",
+        "--icon",
+        action="store_true",
+        help="Add emoji icons to commit messages (e.g., ✨ feat: new feature)",
+        dest="icon",
+    )
+    
+    formatting_group.add_argument(
+        "-A",
+        "--ascii-only",
+        action="store_true",
+        help="Use ASCII alternatives instead of Unicode emojis for better terminal compatibility",
+        dest="ascii_only",
     )
 
 
@@ -575,6 +592,8 @@ def create_config_from_args(args: argparse.Namespace) -> Config:
 
     return Config(
         force_brackets=args.force_brackets,
+        icon=args.icon,
+        ascii_only=args.ascii_only,
         fallback_timeout=args.timeout,
         attempt=args.attempts,
         model=model,

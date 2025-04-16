@@ -24,6 +24,8 @@ class Config:
 
     Attributes:
         force_brackets: Whether to force brackets in commit messages.
+        icon: Whether to include emoji icons in commit messages.
+        ascii_only: Whether to use ASCII alternatives instead of Unicode emojis.
         prompt_threshold: Threshold in lines to determine comprehensive messages.
         fallback_timeout: Timeout in seconds before falling back to simple messages.
         min_comprehensive_length: Minimum length for comprehensive commit messages.
@@ -35,6 +37,8 @@ class Config:
 
     # Default values
     force_brackets: bool = False
+    icon: bool = False
+    ascii_only: bool = False
     prompt_threshold: int = 80
     fallback_timeout: float = 15.0
     min_comprehensive_length: int = 50
@@ -94,6 +98,14 @@ class Config:
                 "force_brackets must be a boolean value",
             ),
             (
+                not isinstance(self.icon, bool),
+                "icon must be a boolean value",
+            ),
+            (
+                not isinstance(self.ascii_only, bool),
+                "ascii_only must be a boolean value",
+            ),
+            (
                 not isinstance(self.prompt_threshold, int)
                 or not self.MIN_THRESHOLD
                 <= self.prompt_threshold
@@ -120,7 +132,7 @@ class Config:
                 "diff_max_length must be a non-negative integer",
             ),
             (
-                not (isinstance(self.model, (g4f.Model, str)) or self.model in g4f.models.__dict__.values()),
+                not (isinstance(self.model, g4f.Model | str) or self.model in g4f.models.__dict__.values()),
                 "model must be a g4f.Model object, a valid model from g4f.models, or a string",
             ),
         ]

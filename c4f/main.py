@@ -59,7 +59,7 @@ YELLOW_FORMAT_THRESHOLD = 50
 
 
 def run_git_command(
-    command: list[str], timeout: int | None = None
+        command: list[str], timeout: int | None = None
 ) -> tuple[str, str, int]:
     """Run a git command and return its output.
 
@@ -109,7 +109,7 @@ def handle_git_status_error(stderr: str) -> None:
 
 
 def process_untracked_file(
-    status: STATUS_TYPE, file_path: str
+        status: STATUS_TYPE, file_path: str
 ) -> List[Tuple[STATUS_TYPE, str]]:
     """Process untracked files and directories.
 
@@ -272,11 +272,15 @@ def handle_untracked_file(path: Path) -> str:
     """Handle untracked files by reading their content.
 
     Returns appropriate messages for files that don't exist or can't be read.
+    Explicitly handles empty files with a special indicator.
     """
     if not path.exists():
         return f"File not found: {path}"
     if not os.access(path, os.R_OK):
         return f"Permission denied: {path}"
+    # Check for empty files
+    if path.is_file() and path.stat().st_size == 0:
+        return f"Empty file: {path}"
 
     try:
         return read_file_content(path)
@@ -290,7 +294,12 @@ def read_file_content(path: Path) -> str:
 
     Checks for null bytes to determine if a file is binary.
     Returns the file content or a message indicating it's a binary file.
+    For empty files, returns a special indicator message.
     """
+    # Check if the file is empty
+    if is_empty_file(path):
+        return f"Empty file: {path}"
+
     try:
         with Path(path).open("r", encoding="utf-8") as f:
             content = f.read(1024)
@@ -300,6 +309,10 @@ def read_file_content(path: Path) -> str:
             return f.read()
     except UnicodeDecodeError:
         return f"Binary file: {path}"
+
+
+def is_empty_file(path: Path) -> bool:
+    return path.exists() and path.stat().st_size == 0
 
 
 def analyze_file_type(file_path: Path, diff: str) -> str:
@@ -390,14 +403,14 @@ def check_file_path_patterns(file_path: Path, _: str) -> str | None:
     """Check file name patterns to determine file type."""
     # Enhanced patterns based on conventional commits and industry standards
     type_patterns = get_test_patterns()
-    return check_patterns(str(file_path), type_patterns)
+    return check_patterns(str(file_path), type_patterns)  # type: ignore
 
 
 def check_diff_patterns(diff: Path, _: str) -> str | None:
     """Check diff content patterns to determine file type."""
     # Enhanced patterns for detecting commit types from diff content
     diff_patterns = get_diff_patterns()
-    return check_patterns(str(diff).lower(), diff_patterns)
+    return check_patterns(str(diff).lower(), diff_patterns)  # type: ignore
 
 
 def get_test_patterns() -> dict[str, str]:
@@ -500,7 +513,7 @@ def generate_commit_message(changes: list[FileChange], config: Config) -> str:
         else:
             return message  # type: ignore
 
-    return generate_fallback_message(changes)
+    return generate_fallback_message(changes, config)
 
 
 def is_corrupted_message(message: Optional[str], config: Config) -> bool:
@@ -510,18 +523,18 @@ def is_corrupted_message(message: Optional[str], config: Config) -> bool:
     format, or doesn't have brackets when required.
     """
     return (
-        not message
-        or not is_conventional_type(message)
-        or not is_conventional_type_with_brackets(message, config)
+            not message
+            or not is_conventional_type(message)
+            or not is_conventional_type_with_brackets(message, config)
     )
 
 
 def get_formatted_message(
-    combined_context: str,
-    tool_calls: Dict[str, str],
-    changes: List[FileChange],
-    total_diff_lines: int,
-    config: Config,
+        combined_context: str,
+        tool_calls: Dict[str, str],
+        changes: List[FileChange],
+        total_diff_lines: int,
+        config: Config,
 ) -> Optional[str]:
     """Get a formatted commit message using the model.
 
@@ -533,7 +546,13 @@ def get_formatted_message(
     )
 
     # Purify Message
-    return purify_message(message)
+    message = purify_message(message)
+
+    # Handle icons based on config
+    if message:
+        message = purify_icons(message, config.icon, config)
+
+    return message
 
 
 def purify_batrick(message: str) -> str:
@@ -608,7 +627,7 @@ def purify_commit_message_introduction(message: str) -> str:
 
     for prefix in prefixes_to_remove:
         if message.lower().startswith(prefix):
-            message = message[len(prefix) :].strip()
+            message = message[len(prefix):].strip()
 
     return message
 
@@ -654,14 +673,14 @@ def purify_disclaimers(message: str) -> str:
     filtered_lines = []
     for line in lines:
         if any(
-            x in line.lower()
-            for x in [
-                "let me know if",
-                "please review",
-                "is this helpful",
-                "hope this",
-                "i've followed",
-            ]
+                x in line.lower()
+                for x in [
+                    "let me know if",
+                    "please review",
+                    "is this helpful",
+                    "hope this",
+                    "i've followed",
+                ]
         ):
             break
         filtered_lines.append(line)
@@ -702,10 +721,77 @@ def purify_message(message: str | None) -> str | None:
     return re.sub(r"\n{3,}", "\n\n", message)
 
 
+# noinspection RegExpAnonymousGroup
+def purify_icons(message: str, icon: bool, config: Optional[Config] = None) -> str:
+    """Handle emoji icons in the commit message based on configuration.
+    
+    Args:
+        message: The commit message to process.
+        icon: Whether icons are enabled.
+        config: Configuration object with additional settings.
+        
+    Returns:
+        The message with icons removed or replaced as appropriate.
+    """
+    if not icon:
+        # If icons are disabled, remove them
+        emoji_pattern = r"^(\s*)([\u2700-\u27BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\U0001F1E0-\U0001F1FF])\s+"
+        return re.sub(emoji_pattern, r"\1", message)
+
+    # If icons are enabled but terminal doesn't support them or ASCII is forced,
+    # replace with ASCII alternatives
+    if config and ((hasattr(config, "ascii_only") and config.ascii_only) or not can_display_emojis()):
+        # Extract the commit type from the message for accurate ASCII replacement
+        commit_type = extract_commit_type(message)
+
+        # First remove any emojis
+        no_emoji = re.sub(
+            r"^(\s*)([\u2700-\u27BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\U0001F1E0-\U0001F1FF])\s+",
+            r"\1", message)
+
+        # Then add appropriate ASCII alternative if we found a commit type
+        if commit_type:
+            return get_ascii_icon_for_type(commit_type) + " " + no_emoji
+
+    return message
+
+
+# noinspection RegExpAnonymousGroup
+def extract_commit_type(message: str) -> Optional[str]:
+    """Extract the commit type from a commit message.
+    
+    Args:
+        message: The commit message to analyze.
+        
+    Returns:
+        The extracted commit type, or None if no type could be found.
+    """
+    # Remove any emojis first
+    clean_msg = re.sub(
+        r"^(\s*)([\u2700-\u27BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\U0001F1E0-\U0001F1FF])\s+",
+        r"\1", message)
+
+    # Try to match a conventional commit type at the start of the message
+    commit_types = ["feat", "fix", "docs", "style", "refactor", "perf",
+                    "test", "build", "ci", "chore", "revert", "security"]
+
+    # First attempt: look for type with scope: feat(scope):
+    match = re.match(r"^(\w+)(\([\w-]+\))?:", clean_msg)
+    if match and match.group(1).lower() in commit_types:
+        return match.group(1).lower()
+
+    # Second attempt: just check if message starts with a valid type
+    for commit_type in commit_types:
+        if clean_msg.lower().startswith(commit_type):
+            return commit_type
+
+    return None
+
+
 def determine_tool_calls(
-    is_comprehensive: bool,
-    combined_text: str,
-    diffs_summary: str = "",
+        is_comprehensive: bool,
+        combined_text: str,
+        diffs_summary: str = "",
 ) -> dict[str, Any]:
     """Determine the appropriate tool calls based on the comprehensiveness of the change.
 
@@ -746,7 +832,7 @@ def create_simple_tool_call(combined_text: str) -> dict[str, Any]:
 
 
 def create_comprehensive_tool_call(
-    combined_text: str, diffs_summary: str
+        combined_text: str, diffs_summary: str
 ) -> dict[str, Any]:
     """Create a tool call for generating a comprehensive commit message.
 
@@ -773,11 +859,11 @@ def create_comprehensive_tool_call(
 
 
 def attempt_generate_message(
-    combined_context: str,
-    tool_calls: dict[str, Any],
-    changes: list[FileChange],
-    total_diff_lines: int,
-    config: Config,
+        combined_context: str,
+        tool_calls: dict[str, Any],
+        changes: list[FileChange],
+        total_diff_lines: int,
+        config: Config,
 ) -> str | None:
     """Attempt to generate a commit message using the model.
 
@@ -788,7 +874,7 @@ def attempt_generate_message(
 
 
 def handle_comprehensive_message(
-    message: str | None, changes: list[FileChange], config: Config
+        message: str | None, changes: list[FileChange], config: Config
 ) -> Optional[str]:
     """Handle a comprehensive commit message, with user interaction for short messages.
 
@@ -809,7 +895,7 @@ def handle_comprehensive_message(
         if action in ["retry", "r"]:
             return "retry"
         if action in ["fallback", "f"]:
-            return generate_fallback_message(changes)
+            return generate_fallback_message(changes, config)
     return message
 
 
@@ -855,13 +941,176 @@ def handle_short_comprehensive_message(model_message: str) -> str:
     return "fallback"
 
 
-def generate_fallback_message(changes: list[FileChange]) -> str:
+def get_icon_for_type(change_type: Optional[str]) -> str:
+    """Get the appropriate icon for a commit type.
+    
+    Args:
+        change_type: The type of change (feat, fix, etc.).
+        
+    Returns:
+        str: The corresponding emoji for the change type.
+    """
+    icons = {
+        "feat": "✨",
+        "fix": "🐛",
+        "docs": "📝",
+        "style": "💄",
+        "refactor": "♻️",
+        "perf": "⚡",
+        "test": "✅",
+        "build": "👷",
+        "ci": "🔧",
+        "chore": "🔨",
+        "revert": "⏪",
+        "security": "🔒"
+    }
+    return icons.get(str(change_type), "🎯")  # Default icon if type not found
+
+
+def get_ascii_icon_for_type(change_type: Optional[str]) -> str:
+    """Get the appropriate ASCII text alternative for emoji icons.
+    
+    Args:
+        change_type: The type of change (feat, fix, etc.).
+        
+    Returns:
+        str: The corresponding ASCII alternative for the change type.
+    """
+    ascii_icons = {
+        "feat": "[+]",
+        "fix": "[!]",
+        "docs": "[d]",
+        "style": "[s]",
+        "refactor": "[r]",
+        "perf": "[p]",
+        "test": "[t]",
+        "build": "[b]",
+        "ci": "[c]",
+        "chore": "[.]",
+        "revert": "[<]",
+        "security": "[#]"
+    }
+    return ascii_icons.get(str(change_type), "[*]")  # Default icon if type not found
+
+
+def can_display_emojis() -> bool:
+    """Check if the terminal likely supports emoji display.
+    
+    This is a best-effort detection that checks the environment
+    to determine if emojis are likely to display correctly.
+    
+    Returns:
+        bool: True if emojis should display correctly, False otherwise.
+    """
+    if is_non_terminal_output():
+        return True
+
+    if has_emoji_compatible_terminal():
+        return True
+
+    if has_utf8_locale():
+        return True
+
+    return has_windows_utf8_support()  # Default Return
+
+
+def is_non_terminal_output() -> bool:
+    """Check if output is not going to a terminal.
+    
+    Returns:
+        bool: True if not a terminal (assume emoji support), False otherwise.
+    """
+    return not sys.stdout.isatty()
+
+
+def has_emoji_compatible_terminal() -> bool:
+    """Check if the terminal type is known to support emojis.
+    
+    Returns:
+        bool: True if terminal is known to support emojis, False otherwise.
+    """
+    term = os.environ.get("TERM", "").lower()
+    emoji_compatible_terms = ["xterm", "vt100", "vt220", "linux", "screen", "tmux"]
+    return any(x in term for x in emoji_compatible_terms)
+
+
+def has_utf8_locale() -> bool:
+    """Check if the system locale is set to UTF-8.
+    
+    Returns:
+        bool: True if locale is UTF-8, False otherwise.
+    """
+    locale = os.environ.get("LC_ALL",
+                            os.environ.get("LC_CTYPE",
+                                           os.environ.get("LANG", "")))
+    return "utf-8" in locale.lower() or "utf8" in locale.lower()
+
+
+def has_windows_utf8_support() -> bool:
+    """Check if Windows console is configured to support UTF-8.
+    
+    Returns:
+        bool: True if Windows console supports UTF-8, False otherwise.
+    """
+    if sys.platform != "win32":
+        return False
+
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        # UTF-8 code page is 65001
+        codepage = 65001
+        return bool(kernel32.GetConsoleOutputCP() == codepage)
+    except (ImportError, AttributeError):
+        return False
+
+
+def select_appropriate_icon(change_type: Optional[str], config: Optional[Config] = None) -> str:
+    """Select the appropriate icon based on terminal capabilities and config.
+    
+    Args:
+        change_type: The type of change (feat, fix, etc.)
+        config: Configuration object with settings for the commit message generator.
+        
+    Returns:
+        str: The appropriate icon (emoji or ASCII) based on terminal support.
+    """
+    # If config is not provided or icons are disabled, return empty string
+    if not config or not config.icon:
+        return ""
+
+    # Check if we're forcing ASCII mode in the config
+    if hasattr(config, "ascii_only") and config.ascii_only:
+        return get_ascii_icon_for_type(change_type) + " "
+
+    # Check if terminal can display emojis
+    if can_display_emojis():
+        return get_icon_for_type(change_type) + " "
+    return get_ascii_icon_for_type(change_type) + " "
+
+
+def generate_fallback_message(changes: list[FileChange], config: Optional[Config] = None) -> str:
     """Generate a simple fallback commit message based on file changes.
 
     Creates a basic commit message using the type of the first change and
-    listing the names of all changed files.
+    listing the names of all changed files. Includes icons if enabled in config.
+    
+    Args:
+        changes: List of file changes to generate a message for.
+        config: Configuration object with settings for the commit message generator.
+        
+    Returns:
+        str: The generated fallback commit message.
     """
-    return f"{changes[0].type}: update {' '.join(str(c.path.name) for c in changes)}"
+    change_type = changes[0].type
+    file_names = " ".join(str(c.path.name) for c in changes)
+
+    # Add appropriate icon if icons are enabled
+    if config and config.icon:
+        icon = select_appropriate_icon(change_type, config)
+        return f"{icon}{change_type}: update {file_names}"
+
+    return f"{change_type}: update {file_names}"
 
 
 def generate_diff_summary(changes: list[FileChange], config: Config) -> str:
@@ -888,7 +1137,7 @@ def generate_diff_summary(changes: list[FileChange], config: Config) -> str:
 
 
 def determine_prompt(
-    combined_text: str, changes: list[FileChange], diff_lines: int, config: Config
+        combined_text: str, changes: list[FileChange], diff_lines: int, config: Config
 ) -> str:
     """Determine the appropriate prompt based on the size of changes.
 
@@ -904,6 +1153,22 @@ def determine_prompt(
     return generate_comprehensive_prompt(combined_text, diffs_summary, config)
 
 
+def get_icon_instruction(icon: bool) -> str:
+    """Get the instruction for including icons in the commit message. """
+    if icon:
+        return """
+        7. Include an appropriate emoji at the start of the commit message based on the change type:
+           ✨ for new features (feat)
+           🐛 for bug fixes (fix)
+           ♻️ for refactoring (refactor)
+           🔥 for removing code (remove)
+           📝 for documentation (docs)
+           ✅ for tests (test)
+           🚀 for deployment (deploy)
+        """
+    return "7. Do not include any emojis in the commit message."
+
+
 def generate_simple_prompt(combined_text: str, config: Config) -> str:
     """Generate a prompt for a simple commit message.
 
@@ -915,17 +1180,21 @@ def generate_simple_prompt(combined_text: str, config: Config) -> str:
         if config.force_brackets
         else ""
     )
+
+    icon_instruction = get_icon_instruction(config.icon)
+
     return f"""
         Analyze these file changes and generate a conventional commit message:
         {combined_text}
         Respond with only a single-line commit message following conventional commits format.
         Keep it brief and focused on the main change.
         {force_brackets_line}
+        {icon_instruction}
         """
 
 
 def generate_comprehensive_prompt(
-    combined_text: str, diffs_summary: str, config: Config
+        combined_text: str, diffs_summary: str, config: Config
 ) -> str:
     """Generate a prompt for a comprehensive commit message.
 
@@ -937,6 +1206,9 @@ def generate_comprehensive_prompt(
         if config.force_brackets
         else ""
     )
+
+    icon_instruction = get_icon_instruction(config.icon)
+
     return f"""
     Analyze these file changes and generate a detailed conventional commit message:
 
@@ -962,6 +1234,7 @@ def generate_comprehensive_prompt(
     4. Add detailed bullet points for significant changes
     5. Mention breaking changes if any
     6. Reference issues/PRs if applicable
+    {icon_instruction}
     
     {force_brackets_line}
     Respond with ONLY the commit message, no explanations.
@@ -969,7 +1242,7 @@ def generate_comprehensive_prompt(
 
 
 def model_prompt(
-    prompt: str, tool_calls: dict[str, Any], config: Config
+        prompt: str, tool_calls: dict[str, Any], config: Config
 ) -> Optional[str]:
     """Send a prompt to the model and get a response.
 
@@ -987,7 +1260,7 @@ def model_prompt(
 
 
 def get_model_response(
-    prompt: str, tool_calls: dict[str, Any], config: Config
+        prompt: str, tool_calls: dict[str, Any], config: Config
 ) -> str | None:
     """Get a response from the model.
 
@@ -1025,27 +1298,27 @@ def get_model_response(
 
 
 def execute_with_progress(
-    func: Callable[..., Optional[str]], *args: object
+        func: Callable[..., Optional[str]], *args: object
 ) -> Optional[str]:
     """Execute a function with a progress indicator.
 
     Shows a spinner while waiting for the function to complete.
     """
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
     ) as progress:
         task = progress.add_task("Waiting for model response...", total=None)
         return execute_with_timeout(func, progress, task, *args)
 
 
 def execute_with_timeout(
-    func: Callable[..., Optional[str]],
-    progress: Progress,
-    task: TaskID,
-    *args: object,
-    timeout: Optional[int] = None,
+        func: Callable[..., Optional[str]],
+        progress: Progress,
+        task: TaskID,
+        *args: object,
+        timeout: Optional[int] = None,
 ) -> Optional[str]:
     """Execute a function with a timeout.
 
@@ -1114,11 +1387,11 @@ def commit_changes(files: list[str], message: str) -> None:
     Stages the files, commits them with the provided message, and displays the result.
     """
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
     ) as progress:
         # Stage files
         stage_files(files, progress)
@@ -1358,7 +1631,7 @@ def get_valid_changes() -> Optional[List[FileChange]]:
 
 
 def process_changed_files(
-    changed_files: List[Tuple[STATUS_TYPE, str]],
+        changed_files: List[Tuple[STATUS_TYPE, str]],
 ) -> List[FileChange]:
     """Process a list of changed files.
 
@@ -1399,15 +1672,21 @@ def create_progress_tasks(progress: Progress, total: int) -> Tuple[TaskID, TaskI
 
 
 def process_single_file(
-    status: STATUS_TYPE, file_path: str, progress: Progress, diff_task: TaskID
+        status: STATUS_TYPE, file_path: str, progress: Progress, diff_task: TaskID
 ) -> Optional[FileChange]:
     """Process a single changed file.
 
     Gets the diff for the file and creates a FileChange object if a diff is found.
+    For empty files, creates a FileChange object with an empty diff.
     """
     path = Path(file_path)
     diff = get_file_diff(file_path)
     progress.advance(diff_task)
+
+    # Handle empty files (they will have empty diffs but should still be included)
+    if not diff and path.exists() and path.is_file() and path.stat().st_size == 0:
+        file_type = analyze_file_type(path, "")
+        return FileChange(path, status, "Empty file", file_type)
     if diff:
         file_type = analyze_file_type(path, diff)
         return FileChange(path, status, diff, file_type)
@@ -1418,12 +1697,19 @@ def create_file_change(status: STATUS_TYPE, file_path: str) -> Optional[FileChan
     """Create a FileChange object for a changed file.
 
     Gets the diff and determines the file type.
-    Returns None if no diff is found.
+    Returns None if no diff is found, unless it's an empty file.
     """
     path = Path(file_path)
     diff = get_file_diff(file_path)
-    file_type = analyze_file_type(path, diff)
-    return FileChange(path, status, diff, file_type) if diff else None
+
+    # Handle empty files (they will have empty diffs but should still be included)
+    if not diff and path.exists() and path.is_file() and path.stat().st_size == 0:
+        file_type = analyze_file_type(path, "")
+        return FileChange(path, status, "Empty file", file_type)
+    if diff:
+        file_type = analyze_file_type(path, diff)
+        return FileChange(path, status, diff, file_type)
+    return None
 
 
 def exit_with_no_changes() -> NoReturn:
@@ -1436,7 +1722,7 @@ def exit_with_no_changes() -> NoReturn:
 
 
 def process_change_group(
-    group: list[FileChange], config: Config, accept_all: bool = False
+        group: list[FileChange], config: Config, accept_all: bool = False
 ) -> bool:
     """Process a group of related file changes.
 
@@ -1509,7 +1795,7 @@ def handle_user_response(response: str, group: list[FileChange], message: str) -
 
 
 def do_group_commit(
-    group: list[FileChange], message: str, accept_all: bool = False
+        group: list[FileChange], message: str, accept_all: bool = False
 ) -> bool:
     """Commit a group of changes and return whether to accept all future commits.
 
