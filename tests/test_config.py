@@ -20,7 +20,7 @@ class TestConfig:
         assert config.is_valid()
         assert config.force_brackets is False
         assert config.prompt_threshold == 80
-        assert config.fallback_timeout == 10.0
+        assert config.fallback_timeout == 15.0
         assert config.min_comprehensive_length == 50
         assert config.attempt == 3
         assert config.diff_max_length == 100
@@ -233,7 +233,7 @@ class TestConfig:
         assert default_config.is_valid()
         assert default_config.force_brackets is False
         assert default_config.prompt_threshold == 80
-        assert default_config.fallback_timeout == 10.0
+        assert default_config.fallback_timeout == 15.0
         assert default_config.min_comprehensive_length == 50
         assert default_config.attempt == 3
         assert default_config.diff_max_length == 100
@@ -268,7 +268,7 @@ class TestConfig:
         assert "Config(" in repr_str
         assert "force_brackets=False" in repr_str
         assert "prompt_threshold=80" in repr_str
-        assert "fallback_timeout=10.0" in repr_str
+        assert "fallback_timeout=15.0" in repr_str
         assert "min_comprehensive_length=50" in repr_str
         assert "attempt=3" in repr_str
         assert "diff_max_length=100" in repr_str
