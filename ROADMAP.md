@@ -30,8 +30,8 @@ This document outlines the planned features and improvements for future releases
 - [ ] Customizable output formats
 
 ### Multi-task Support for Fast Development
-- [ ] Parallel processing of multiple commits
-- [ ] Batch commit operations
+- [x] Parallel processing of multiple commits
+- [x] Batch commit operations
 - [ ] Branch summaries and management
 - [ ] Integration with CI/CD workflows
 
