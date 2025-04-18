@@ -40,6 +40,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from c4f._purifier import Purify, can_display_emojis, get_ascii_icon_for_type
 from c4f.config import Config
 from c4f.utils import (  # type: ignore
     STATUS_TYPE,
@@ -529,6 +530,84 @@ def is_corrupted_message(message: Optional[str], config: Config) -> bool:
     )
 
 
+def is_conventional_type(message: str) -> bool:
+    """Check if a message follows conventional commit type format.
+
+    Verifies that the message follows the conventional commit format: type: message
+    or type(scope): message, where type is one of the conventional commit types.
+    """
+    if not message:
+        return False
+    
+    # Define valid conventional commit types
+    conventional_types = get_conventional_commit_types()
+    
+    # Check if the message follows the standard format with regex
+    if is_standard_conventional_format(message):
+        return True
+        
+    # For compatibility, also check simpler format without scope
+    return bool(is_simple_conventional_format(message, conventional_types))
+
+
+def get_conventional_commit_types() -> list[str]:
+    """Return a list of valid conventional commit types."""
+    return [
+        "feat",
+        "test",
+        "fix",
+        "docs",
+        "chore",
+        "refactor",
+        "style",
+        "perf",
+        "ci",
+        "build",
+        "security",
+        "revert"
+    ]
+
+
+def is_standard_conventional_format(message: str) -> bool:
+    """Check if message follows standard conventional format with optional scope."""
+    # Pattern checks for valid type followed by optional scope, then colon and space
+    pattern = r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|security)(\([^)]*\))?:\s"
+    
+    lower_message = message.lower()
+    
+    if re.match(pattern, lower_message):
+        # Verify there's only one scope parenthesis pair before the colon
+        prefix = lower_message.split(":", 1)[0]
+        return prefix.count("(") <= 1 and prefix.count(")") <= 1
+    
+    return False
+
+
+def is_simple_conventional_format(message: str, conventional_types: list[str]) -> bool:
+    """Check if message follows simple conventional format without scope."""
+    lower_message = message.lower()
+    
+    for commit_type in conventional_types:
+        if lower_message.startswith((f"{commit_type}:", f"{commit_type} :")):
+            # Make sure there are no parentheses before the colon in this case
+            prefix = lower_message.split(":", 1)[0]
+            return "(" not in prefix and ")" not in prefix
+    
+    return False
+
+
+def is_conventional_type_with_brackets(message: str, config: Config) -> bool:
+    """Check if a message follows conventional commit type format with brackets.
+
+    If FORCE_BRACKETS is enabled, ensures the message has brackets in the first word.
+    """
+    if not config.force_brackets:
+        return True
+
+    first_word: str = message.split()[0]
+    return not ("(" not in first_word and ")" not in first_word)
+
+
 def get_formatted_message(
         combined_context: str,
         tool_calls: Dict[str, str],
@@ -546,246 +625,13 @@ def get_formatted_message(
     )
 
     # Purify Message
-    message = purify_message(message)
+    message = Purify.message(message, config)
 
     # Handle icons based on config
     if message:
-        message = purify_icons(message, config.icon, config)
+        message = Purify.icons(message, config.icon, config)
 
     return message
-
-
-def purify_batrick(message: str) -> str:
-    """Remove code block formatting (backticks) from a message.
-
-    Handles different code block formats including those with language specifiers.
-    """
-    if message.startswith("```") and message.endswith("```"):
-        # Check if there's a language specifier like ```git or ```commit
-        lines = message.split("\n")
-        if len(lines) > 2:  # noqa: PLR2004
-            # If first line has just the opening backticks with potential language specifier
-            if lines[0].startswith("```") and len(lines[0]) <= 10:  # noqa: PLR2004
-                message = "\n".join(lines[1:-1])
-            else:
-                message = message[3:-3]
-        else:
-            message = message[3:-3]
-
-    return message
-
-
-def is_conventional_type(message: str) -> bool:
-    """Check if a message follows conventional commit type format.
-
-    Verifies that the message contains one of the conventional commit types.
-    """
-    return any(
-        x in message.lower()
-        for x in [
-            "feat",
-            "test",
-            "fix",
-            "docs",
-            "chore",
-            "refactor",
-            "style",
-            "perf",
-            "ci",
-            "build",
-            "security",
-        ]
-    )
-
-
-def is_conventional_type_with_brackets(message: str, config: Config) -> bool:
-    """Check if a message follows conventional commit type format with brackets.
-
-    If FORCE_BRACKETS is enabled, ensures the message has brackets in the first word.
-    """
-    if not config.force_brackets:
-        return True
-
-    first_word: str = message.split()[0]
-    return not ("(" not in first_word and ")" not in first_word)
-
-
-def purify_commit_message_introduction(message: str) -> str:
-    """Remove common introductory phrases from commit messages.
-
-    Removes prefixes like "commit message:" that are often added by AI models.
-    """
-    prefixes_to_remove = [
-        "commit message:",
-        "commit:",
-        "git commit message:",
-        "suggested commit message:",
-        "here's a commit message:",
-        "here is the commit message:",
-        "here is a commit message:",
-    ]
-
-    for prefix in prefixes_to_remove:
-        if message.lower().startswith(prefix):
-            message = message[len(prefix):].strip()
-
-    return message
-
-
-def purify_explantory_message(message: str) -> str:
-    """Remove explanatory sections from commit messages.
-
-    Removes sections that start with markers like "explanation:" or "note:".
-    """
-    explanatory_markers = [
-        "explanation:",
-        "explanation of changes:",
-        "note:",
-        "notes:",
-        "this commit message",
-        "i hope this helps",
-        "please let me know",
-    ]
-
-    for marker in explanatory_markers:
-        if marker in message.lower():
-            parts = message.lower().split(marker)
-            message = parts[0].strip()
-
-    return message
-
-
-def purify_htmlxml(message: str) -> str:
-    """Remove HTML/XML tags from a message.
-
-    Uses a regex pattern to strip out HTML-like tags from the message.
-    """
-    return re.sub(r"<[^>]+>", "", message)
-
-
-def purify_disclaimers(message: str) -> str:
-    """Remove trailing disclaimers from a message.
-
-    Stops processing lines once it encounters a disclaimer phrase, keeping only
-    the content before it.
-    """
-    lines = message.strip().split("\n")
-    filtered_lines = []
-    for line in lines:
-        if any(
-                x in line.lower()
-                for x in [
-                    "let me know if",
-                    "please review",
-                    "is this helpful",
-                    "hope this",
-                    "i've followed",
-                ]
-        ):
-            break
-        filtered_lines.append(line)
-
-    return "\n".join(filtered_lines).strip()
-
-
-def purify_message(message: str | None) -> str | None:
-    """Clean up the message from the chatbot to ensure it's a proper commit message.
-
-    Applies multiple purification steps to clean up the message:
-    - Removes code blocks with backticks
-    - Removes introductions like "commit message:"
-    - Removes explanatory text
-    - Removes HTML/XML tags
-    - Removes trailing disclaimers
-    - Normalizes whitespace
-    """
-    if not message:
-        return None
-
-    # Remove code blocks with backticks
-    message = purify_batrick(message)
-
-    # Remove any "commit message:" or similar prefixes
-    message = purify_commit_message_introduction(message)
-
-    # Remove any explanatory text after the commit message
-    message = purify_explantory_message(message)
-
-    # Remove any HTML/XML tags
-    message = purify_htmlxml(message)
-
-    # Remove any trailing disclaimers or instructions
-    message = purify_disclaimers(message)
-
-    # Normalize whitespace and remove excess blank lines
-    return re.sub(r"\n{3,}", "\n\n", message)
-
-
-# noinspection RegExpAnonymousGroup
-def purify_icons(message: str, icon: bool, config: Optional[Config] = None) -> str:
-    """Handle emoji icons in the commit message based on configuration.
-    
-    Args:
-        message: The commit message to process.
-        icon: Whether icons are enabled.
-        config: Configuration object with additional settings.
-        
-    Returns:
-        The message with icons removed or replaced as appropriate.
-    """
-    if not icon:
-        # If icons are disabled, remove them
-        emoji_pattern = r"^(\s*)([\u2700-\u27BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\U0001F1E0-\U0001F1FF])\s+"
-        return re.sub(emoji_pattern, r"\1", message)
-
-    # If icons are enabled but terminal doesn't support them or ASCII is forced,
-    # replace with ASCII alternatives
-    if config and ((hasattr(config, "ascii_only") and config.ascii_only) or not can_display_emojis()):
-        # Extract the commit type from the message for accurate ASCII replacement
-        commit_type = extract_commit_type(message)
-
-        # First remove any emojis
-        no_emoji = re.sub(
-            r"^(\s*)([\u2700-\u27BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\U0001F1E0-\U0001F1FF])\s+",
-            r"\1", message)
-
-        # Then add appropriate ASCII alternative if we found a commit type
-        if commit_type:
-            return get_ascii_icon_for_type(commit_type) + " " + no_emoji
-
-    return message
-
-
-# noinspection RegExpAnonymousGroup
-def extract_commit_type(message: str) -> Optional[str]:
-    """Extract the commit type from a commit message.
-    
-    Args:
-        message: The commit message to analyze.
-        
-    Returns:
-        The extracted commit type, or None if no type could be found.
-    """
-    # Remove any emojis first
-    clean_msg = re.sub(
-        r"^(\s*)([\u2700-\u27BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\U0001F1E0-\U0001F1FF])\s+",
-        r"\1", message)
-
-    # Try to match a conventional commit type at the start of the message
-    commit_types = ["feat", "fix", "docs", "style", "refactor", "perf",
-                    "test", "build", "ci", "chore", "revert", "security"]
-
-    # First attempt: look for type with scope: feat(scope):
-    match = re.match(r"^(\w+)(\([\w-]+\))?:", clean_msg)
-    if match and match.group(1).lower() in commit_types:
-        return match.group(1).lower()
-
-    # Second attempt: just check if message starts with a valid type
-    for commit_type in commit_types:
-        if clean_msg.lower().startswith(commit_type):
-            return commit_type
-
-    return None
 
 
 def determine_tool_calls(
@@ -965,104 +811,6 @@ def get_icon_for_type(change_type: Optional[str]) -> str:
         "security": "🔒"
     }
     return icons.get(str(change_type), "🎯")  # Default icon if type not found
-
-
-def get_ascii_icon_for_type(change_type: Optional[str]) -> str:
-    """Get the appropriate ASCII text alternative for emoji icons.
-    
-    Args:
-        change_type: The type of change (feat, fix, etc.).
-        
-    Returns:
-        str: The corresponding ASCII alternative for the change type.
-    """
-    ascii_icons = {
-        "feat": "[+]",
-        "fix": "[!]",
-        "docs": "[d]",
-        "style": "[s]",
-        "refactor": "[r]",
-        "perf": "[p]",
-        "test": "[t]",
-        "build": "[b]",
-        "ci": "[c]",
-        "chore": "[.]",
-        "revert": "[<]",
-        "security": "[#]"
-    }
-    return ascii_icons.get(str(change_type), "[*]")  # Default icon if type not found
-
-
-def can_display_emojis() -> bool:
-    """Check if the terminal likely supports emoji display.
-    
-    This is a best-effort detection that checks the environment
-    to determine if emojis are likely to display correctly.
-    
-    Returns:
-        bool: True if emojis should display correctly, False otherwise.
-    """
-    if is_non_terminal_output():
-        return True
-
-    if has_emoji_compatible_terminal():
-        return True
-
-    if has_utf8_locale():
-        return True
-
-    return has_windows_utf8_support()  # Default Return
-
-
-def is_non_terminal_output() -> bool:
-    """Check if output is not going to a terminal.
-    
-    Returns:
-        bool: True if not a terminal (assume emoji support), False otherwise.
-    """
-    return not sys.stdout.isatty()
-
-
-def has_emoji_compatible_terminal() -> bool:
-    """Check if the terminal type is known to support emojis.
-    
-    Returns:
-        bool: True if terminal is known to support emojis, False otherwise.
-    """
-    term = os.environ.get("TERM", "").lower()
-    emoji_compatible_terms = ["xterm", "vt100", "vt220", "linux", "screen", "tmux"]
-    return any(x in term for x in emoji_compatible_terms)
-
-
-def has_utf8_locale() -> bool:
-    """Check if the system locale is set to UTF-8.
-    
-    Returns:
-        bool: True if locale is UTF-8, False otherwise.
-    """
-    locale = os.environ.get("LC_ALL",
-                            os.environ.get("LC_CTYPE",
-                                           os.environ.get("LANG", "")))
-    return "utf-8" in locale.lower() or "utf8" in locale.lower()
-
-
-def has_windows_utf8_support() -> bool:
-    """Check if Windows console is configured to support UTF-8.
-    
-    Returns:
-        bool: True if Windows console supports UTF-8, False otherwise.
-    """
-    if sys.platform != "win32":
-        return False
-
-    try:
-        import ctypes
-        kernel32 = ctypes.windll.kernel32
-        # UTF-8 code page is 65001
-        codepage = 65001
-        return bool(kernel32.GetConsoleOutputCP() == codepage)
-    except (ImportError, AttributeError):
-        return False
 
 
 def select_appropriate_icon(change_type: Optional[str], config: Optional[Config] = None) -> str:
