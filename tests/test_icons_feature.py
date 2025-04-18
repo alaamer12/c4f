@@ -11,18 +11,12 @@ import pytest
 from c4f.config import Config
 from c4f.main import (
     FileChange,
-    can_display_emojis,
-    extract_commit_type,
     generate_fallback_message,
-    get_ascii_icon_for_type,
     get_icon_for_type,
-    has_emoji_compatible_terminal,
-    has_utf8_locale,
-    has_windows_utf8_support,
-    is_non_terminal_output,
-    purify_icons,
     select_appropriate_icon,
 )
+from c4f._purifier import Purify, can_display_emojis, get_ascii_icon_for_type, is_non_terminal_output, \
+    has_emoji_compatible_terminal, has_utf8_locale, has_windows_utf8_support
 
 
 class TestIconUtilityFunctions:
@@ -102,12 +96,12 @@ class TestIconUtilityFunctions:
         """Test has_windows_utf8_support on non-Windows platforms."""
         assert has_windows_utf8_support() is False
 
-    @patch("c4f.main.is_non_terminal_output")
-    @patch("c4f.main.has_emoji_compatible_terminal")
-    @patch("c4f.main.has_utf8_locale")
-    @patch("c4f.main.has_windows_utf8_support")
+    @patch("c4f._purifier.is_non_terminal_output")
+    @patch("c4f._purifier.has_emoji_compatible_terminal")
+    @patch("c4f._purifier.has_utf8_locale")
+    @patch("c4f._purifier.has_windows_utf8_support")
     def test_can_display_emojis_all_paths(
-        self, mock_windows, mock_locale, mock_terminal, mock_non_terminal
+        self, mock_non_terminal, mock_locale, mock_terminal, mock_windows,
     ):
         """Test can_display_emojis with all possible paths."""
         # Test non-terminal output
@@ -207,7 +201,7 @@ class TestIconFormatFunctions:
     )
     def test_extract_commit_type(self, message, expected_type):
         """Test extract_commit_type with various commit messages."""
-        assert extract_commit_type(message) == expected_type
+        assert Purify.extract_commit_type(message) == expected_type
 
     @pytest.mark.parametrize(
         "message,icon_enabled,expected",
@@ -223,10 +217,10 @@ class TestIconFormatFunctions:
     )
     def test_purify_icons_basic(self, message, icon_enabled, expected):
         """Test purify_icons with icons enabled/disabled."""
-        assert purify_icons(message, icon_enabled) == expected
+        assert Purify.icons(message, icon_enabled) == expected
 
-    @patch("c4f.main.extract_commit_type")
-    @patch("c4f.main.can_display_emojis")
+    @patch("c4f._purifier.Purify.extract_commit_type")
+    @patch("c4f._purifier.can_display_emojis")
     def test_purify_icons_with_ascii_conversion(self, mock_can_display, mock_extract_type):
         """Test purify_icons with ASCII conversion."""
         # Setup
@@ -235,14 +229,14 @@ class TestIconFormatFunctions:
         mock_extract_type.return_value = "feat"
         
         # Execute
-        result = purify_icons(message, True, config)
+        result = Purify.icons(message, True, config)
         
         # Verify
         assert "[+] " in result
         assert "✨" not in result
         assert "feat: new feature" in result
 
-    @patch("c4f.main.can_display_emojis")
+    @patch("c4f._purifier.can_display_emojis")
     def test_purify_icons_terminal_capability(self, mock_can_display):
         """Test purify_icons terminal capability check."""
         # Setup
@@ -251,13 +245,13 @@ class TestIconFormatFunctions:
         
         # Test with terminal that can't display emojis
         mock_can_display.return_value = False
-        result = purify_icons(message, True, config)
+        result = Purify.icons(message, True, config)
         assert "✨" not in result
         assert "[+]" in result
         
         # Test with terminal that can display emojis
         mock_can_display.return_value = True
-        result = purify_icons(message, True, config)
+        result = Purify.icons(message, True, config)
         assert "✨" in result
 
 
