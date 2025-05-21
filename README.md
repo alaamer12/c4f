@@ -199,6 +199,40 @@ Key configuration options available through command-line arguments:
 | `--force-brackets` | Force brackets in conventional format        | False      |
 | `--icon`           | Add emoji icons to commit messages           | False      |
 | `--ascii-only`     | Use ASCII alternatives instead of Unicode    | False      |
+| `--models`         | Display all available models and exit        | -          |
+
+## Model Performance
+
+We've extensively tested various G4F models to find the optimal balance between response quality and speed. Based on our testing, we recommend using one of the following models:
+
+- `gpt-4-mini` (default, reliable and fast)
+- `gpt-3-5-turbo` (good alternative)
+- `MetaAI` (good for general purpose commit messages)
+- `default` (balanced between quality and speed)
+
+![G4F Models Performance Comparison](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/model_response_times.png "Model Response Times Comparison")
+
+The chart above shows average response times for different models. As you can see, some models (like ARTA) have significantly longer response times, while others are much faster.
+
+### Viewing Available Models
+
+To see all available models and get recommendations:
+
+```bash
+c4f --models
+```
+
+This will display a formatted table of all supported models with recommended ones highlighted.
+
+### Handling Timeouts
+
+> **⚠️ Warning:** If you experience frequent timeouts during commit message generation, try one of the following:
+>
+> 1. Increase the timeout value: `c4f --timeout 30`
+> 2. Switch to a faster model: `c4f --model MetaAI`
+> 3. Reduce the number of changes in a single commit
+>
+> Different models have varying response times and reliability. If one model consistently times out, try another from the recommended list.
 
 ## Requirements
 
