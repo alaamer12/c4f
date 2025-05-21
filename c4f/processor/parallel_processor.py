@@ -29,7 +29,7 @@ from c4f.processor.base import Processor
 from c4f.processor.processor_queue import ProcessorQueue
 from c4f.utils import FileChange, console
 
-__all__ = ["ParallelProcessor", "MessageGenerator"]
+__all__ = ["MessageGenerator", "ParallelProcessor"]
 
 
 class MessageGenerator:
@@ -115,7 +115,7 @@ class ParallelProcessor(Processor):
 
     def _queue_all_groups(self, groups: List[List[FileChange]]) -> None:
         """Add all groups to the processing queue.
-        
+
         Args:
             groups: List of groups of file changes.
         """
@@ -124,7 +124,7 @@ class ParallelProcessor(Processor):
 
     def _process_groups_in_parallel(self, total_groups: int) -> None:
         """Process all queued groups in parallel with a progress bar.
-        
+
         Args:
             total_groups: Total number of groups to process.
         """
@@ -139,35 +139,30 @@ class ParallelProcessor(Processor):
             self._execute_parallel_tasks(total_groups, progress, task)
 
     def _execute_parallel_tasks(
-            self,
-            total_tasks: int,
-            progress: Progress,
-            task_id: TaskID
+        self, total_tasks: int, progress: Progress, task_id: TaskID
     ) -> None:
         """Execute tasks in parallel using a thread pool.
-        
+
         Args:
             total_tasks: Total number of tasks to execute.
             progress: Progress bar instance.
             task_id: ID of the progress bar task.
         """
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=self.config.MAX_WORKERS
+            max_workers=self.config.MAX_WORKERS
         ) as executor:
             futures = self._submit_tasks(executor, total_tasks)
             self._process_completed_futures(futures, progress, task_id)
 
     def _submit_tasks(
-            self,
-            executor: concurrent.futures.ThreadPoolExecutor,
-            total_tasks: int
+        self, executor: concurrent.futures.ThreadPoolExecutor, total_tasks: int
     ) -> List[concurrent.futures.Future]:
         """Submit tasks to the executor.
-        
+
         Args:
             executor: ThreadPoolExecutor instance.
             total_tasks: Number of tasks to submit.
-            
+
         Returns:
             List of futures for submitted tasks.
         """
@@ -178,13 +173,13 @@ class ParallelProcessor(Processor):
         return futures
 
     def _process_completed_futures(
-            self,
-            futures: List[concurrent.futures.Future],
-            progress: Progress,
-            task_id: TaskID
+        self,
+        futures: List[concurrent.futures.Future],
+        progress: Progress,
+        task_id: TaskID,
     ) -> None:
         """Process completed futures and update progress.
-        
+
         Args:
             futures: List of futures to process.
             progress: Progress bar instance.
@@ -200,7 +195,7 @@ class ParallelProcessor(Processor):
 
     def _collect_results(self) -> Dict[Tuple[str, ...], Optional[str]]:
         """Collect all results from the queue.
-        
+
         Returns:
             Dictionary mapping group keys to generated messages.
         """
@@ -247,10 +242,10 @@ class ParallelProcessor(Processor):
 
     def _handle_missing_message(self, group: List[FileChange]) -> bool:
         """Handle the case when no pre-generated message is available.
-        
+
         Args:
             group: List of file changes to process.
-            
+
         Returns:
             bool: Result from the fallback processing.
         """
@@ -261,15 +256,15 @@ class ParallelProcessor(Processor):
         return process_change_group(group, self.config)
 
     def _process_with_existing_message(
-            self, group: List[FileChange], message: str, accept_all: bool = False
+        self, group: List[FileChange], message: str, accept_all: bool = False
     ) -> bool:
         """Process a group with an existing pre-generated message.
-        
+
         Args:
             group: List of file changes to process.
             message: Pre-generated commit message.
             accept_all: Whether to automatically accept the commit.
-            
+
         Returns:
             bool: True if the user chose to accept all future commits.
         """
@@ -284,10 +279,10 @@ class ParallelProcessor(Processor):
 
     def _render_markdown_message(self, message: str) -> str:
         """Render a markdown message to a string.
-        
+
         Args:
             message: Markdown message to render.
-            
+
         Returns:
             str: Rendered markdown as a string.
         """
@@ -325,14 +320,12 @@ class ParallelProcessor(Processor):
 
     def _check_if_stopped(self) -> bool:
         """Check if processing has been stopped.
-        
+
         Returns:
             bool: True if processing should stop, False otherwise.
         """
         if self._stop_event.is_set():
-            self.console.print(
-                "[yellow]Processing stopped by user or error[/yellow]"
-            )
+            self.console.print("[yellow]Processing stopped by user or error[/yellow]")
             return True
         return False
 
@@ -342,18 +335,22 @@ class ParallelProcessor(Processor):
         return tuple(str(change.path) for change in group)
 
     @staticmethod
-    def _process_with_auto_accept(group: List[FileChange], message: Optional[str]) -> bool:
+    def _process_with_auto_accept(
+        group: List[FileChange], message: Optional[str]
+    ) -> bool:
         """Process a group with automatic acceptance.
-        
+
         Args:
             group: List of file changes to process.
             message: Pre-generated commit message.
-            
+
         Returns:
             bool: True to continue auto-accepting commits.
         """
         # If user chose to accept all, just commit without showing the message
-        fallback_message = f"{group[0].type}: update {' '.join(str(c.path.name) for c in group)}"
+        fallback_message = (
+            f"{group[0].type}: update {' '.join(str(c.path.name) for c in group)}"
+        )
         do_group_commit(
             group,
             message or fallback_message,
@@ -361,13 +358,15 @@ class ParallelProcessor(Processor):
         )
         return True
 
-    def _process_with_user_confirmation(self, group: List[FileChange], message: Optional[str]) -> bool:
+    def _process_with_user_confirmation(
+        self, group: List[FileChange], message: Optional[str]
+    ) -> bool:
         """Process a group with user confirmation.
-        
+
         Args:
             group: List of file changes to process.
             message: Pre-generated commit message.
-            
+
         Returns:
             bool: True if user chose to accept all future commits.
         """
@@ -382,14 +381,12 @@ class ParallelProcessor(Processor):
 
     def _handle_keyboard_interrupt(self) -> None:
         """Handle keyboard interrupt during processing."""
-        self.console.print(
-            "[yellow]Processing interrupted by user[/yellow]"
-        )
+        self.console.print("[yellow]Processing interrupted by user[/yellow]")
         self._stop_event.set()
 
     def _handle_processing_error(self, error: Exception) -> None:
         """Handle errors during group processing.
-        
+
         Args:
             error: The exception that occurred.
         """

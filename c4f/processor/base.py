@@ -13,7 +13,7 @@ class Processor(ABC):
     @abstractmethod
     def __init__(self, config: Config) -> None:
         """Initialize the processor with configuration.
-        
+
         Args:
             config: Configuration object with settings for the commit message generator.
         """
@@ -26,7 +26,7 @@ class Processor(ABC):
     @abstractmethod
     def process_groups(self, groups: List[List[FileChange]]) -> None:
         """Process groups of file changes.
-        
+
         Args:
             groups: List of groups of file changes.
         """

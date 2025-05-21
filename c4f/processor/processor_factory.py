@@ -13,7 +13,8 @@ from c4f.processor.base import Processor
 from c4f.processor.sequential_processor import SequentialProcessor
 from c4f.utils import FileChange
 
-__all__ = ["ProcessorFactory", "ProcessingStrategy"]
+__all__ = ["ProcessingStrategy", "ProcessorFactory"]
+
 
 class ProcessingStrategy(Enum):
     """Enum for different processing strategies."""
@@ -135,5 +136,3 @@ class ProcessorFactory:
                 if hasattr(processor, "stop"):
                     processor.stop()
             cls._instances.clear()
-
-

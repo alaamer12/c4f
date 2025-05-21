@@ -97,7 +97,7 @@ class BatchProcessor(Processor):
             return message
 
     def split_message_for_groups(
-            self, message: str, groups: List[List[FileChange]]
+        self, message: str, groups: List[List[FileChange]]
     ) -> Dict[Tuple[str, ...], str]:
         """Split a batch message into parts for individual groups.
 
@@ -116,7 +116,7 @@ class BatchProcessor(Processor):
         return self._assign_full_message_to_groups(message, groups)
 
     def _split_message_with_bullets(
-            self, message: str, groups: List[List[FileChange]]
+        self, message: str, groups: List[List[FileChange]]
     ) -> Dict[Tuple[str, ...], str]:
         """Split a multipart message into parts for individual groups based on bullet points.
 
@@ -156,7 +156,7 @@ class BatchProcessor(Processor):
         return header, bullet_points
 
     def _find_best_matching_bullet(
-            self, group: List[FileChange], bullet_points: List[str]
+        self, group: List[FileChange], bullet_points: List[str]
     ) -> Optional[str]:
         """Find the bullet point that best matches the files in the group.
 
@@ -200,7 +200,7 @@ class BatchProcessor(Processor):
 
     @staticmethod
     def _assign_full_message_to_groups(
-            message: str, groups: List[List[FileChange]]
+        message: str, groups: List[List[FileChange]]
     ) -> Dict[Tuple[str, ...], str]:
         """Assign the full message to all groups.
 
@@ -227,7 +227,9 @@ class BatchProcessor(Processor):
         self._update_messages_dict(batch_messages)
         self.process_groups_with_messages(groups)
 
-    def _split_into_batches(self, groups: List[List[FileChange]]) -> List[List[List[FileChange]]]:
+    def _split_into_batches(
+        self, groups: List[List[FileChange]]
+    ) -> List[List[List[FileChange]]]:
         """Split groups into batches of specified size.
 
         Args:
@@ -237,7 +239,7 @@ class BatchProcessor(Processor):
             List of batches, where each batch contains multiple groups.
         """
         return [
-            groups[i: i + self.batch_size]
+            groups[i : i + self.batch_size]
             for i in range(0, len(groups), self.batch_size)
         ]
 
@@ -253,7 +255,7 @@ class BatchProcessor(Processor):
         )
 
     def _process_batches_with_progress(
-            self, batches: List[List[List[FileChange]]]
+        self, batches: List[List[List[FileChange]]]
     ) -> Dict[Tuple[str, ...], str]:
         """Process batches with a progress bar.
 
@@ -266,23 +268,25 @@ class BatchProcessor(Processor):
         all_batch_messages = {}
 
         with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-                console=self.console,
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=self.console,
         ) as progress:
             batch_task = progress.add_task("Processing batches...", total=len(batches))
-            batch_messages = self._process_batches_in_parallel(batches, progress, batch_task)
+            batch_messages = self._process_batches_in_parallel(
+                batches, progress, batch_task
+            )
             all_batch_messages.update(batch_messages)
 
         return all_batch_messages
 
     def _process_batches_in_parallel(
-            self,
-            batches: List[List[List[FileChange]]],
-            progress: Progress,
-            batch_task: TaskID
+        self,
+        batches: List[List[List[FileChange]]],
+        progress: Progress,
+        batch_task: TaskID,
     ) -> Dict[Tuple[str, ...], str]:
         """Process batches in parallel using a thread pool.
 
@@ -297,7 +301,7 @@ class BatchProcessor(Processor):
         all_messages = {}
 
         with concurrent.futures.ThreadPoolExecutor(
-                max_workers=min(len(batches), self.config.MAX_WORKERS)
+            max_workers=min(len(batches), self.config.MAX_WORKERS)
         ) as executor:
             # Submit batch processing tasks
             batch_futures = {
@@ -315,9 +319,7 @@ class BatchProcessor(Processor):
         return all_messages
 
     def _handle_batch_future(
-            self,
-            future: concurrent.futures.Future,
-            batch_idx: int
+        self, future: concurrent.futures.Future, batch_idx: int
     ) -> Dict[Tuple[str, ...], str]:
         """Handle the result of a batch processing future.
 
@@ -332,9 +334,7 @@ class BatchProcessor(Processor):
             # Get the result
             batch_messages = future.result()
         except Exception as e:
-            self.console.print(
-                f"[red]Error processing batch {batch_idx}: {e!s}[/red]"
-            )
+            self.console.print(f"[red]Error processing batch {batch_idx}: {e!s}[/red]")
             return {}
         else:
             return batch_messages or {}
@@ -348,7 +348,7 @@ class BatchProcessor(Processor):
         self.messages.update(batch_messages)
 
     def _process_batch(
-            self, batch: List[List[FileChange]]
+        self, batch: List[List[FileChange]]
     ) -> Dict[Tuple[str, ...], str]:
         """Process a single batch of groups.
 
@@ -425,9 +425,9 @@ class BatchProcessor(Processor):
 
     def process_groups(self, groups: List[List[FileChange]]) -> None:
         """Process groups of file changes in batches.
-        
+
         Implementation of the abstract method from the base Processor class.
-        
+
         Args:
             groups: List of groups of file changes.
         """
@@ -435,5 +435,7 @@ class BatchProcessor(Processor):
             self.process_batches(groups)
         except Exception as e:
             self.console.print(f"[red]Error in batch processing: {e!s}[/red]")
-            self.console.print("[yellow]Falling back to sequential batch processing...[/yellow]")
+            self.console.print(
+                "[yellow]Falling back to sequential batch processing...[/yellow]"
+            )
             self.process_batches_sequential(groups)

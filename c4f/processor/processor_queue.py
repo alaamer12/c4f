@@ -93,7 +93,7 @@ class ProcessorQueue:
             self._event.set()
 
     def get_result(
-            self, group_key: Tuple[str, ...], timeout: Optional[float] = None
+        self, group_key: Tuple[str, ...], timeout: Optional[float] = None
     ) -> Optional[str]:
         """Get the result for a group.
 

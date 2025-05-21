@@ -11,5 +11,5 @@ __all__ = [
     "ProcessingStrategy",
     "ProcessorFactory",
     "ProcessorQueue",
-    "SequentialProcessor"
+    "SequentialProcessor",
 ]
