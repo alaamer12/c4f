@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2025-05-21
+
+### Added
+- Concurrent threading support for model requests with `--threads` flag
+- New thread_count parameter in configuration for controlling concurrency
+- Thread-based model response mechanism that uses first successful response
+
+### Changed
+- Optimized model response time by making parallel requests
+- Enhanced reliability when dealing with unstable free API endpoints
+- Improved CLI help text to document new threading feature
+
+### Fixed
+- Reduced timeout frequency by implementing concurrent requests
+- More consistent response times across different models and network conditions
+
+### Technical
+- Implemented ThreadPoolExecutor for managing concurrent API requests
+- Added thread count validation (1-5 threads) in configuration 
+- Created graceful cancellation mechanism for remaining requests after success
+
 ## [1.1.3] - 2025-04-18
 
 ### Added

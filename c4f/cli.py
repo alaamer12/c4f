@@ -11,8 +11,11 @@ Arguments:
     -m, --model MODEL      Set the AI model to use [default: gpt-4-mini]
     -a, --attempts NUM     Set the number of generation attempts [default: 3]
     -t, --timeout SEC      Set the fallback timeout in seconds [default: 10]
+    --threads NUM          Set the number of concurrent threads for requests [default: 3]
     -f, --force-brackets   Force conventional commit type with brackets [default: False]
     -i, --icon             Add emoji icons to commit messages [default: False]
+    -A, --ascii-only       Use ASCII alternatives instead of Unicode emojis [default: False]
+    --models               Display all available models and exit
 """
 
 import argparse
@@ -467,6 +470,16 @@ def add_generation_arguments(parser: argparse.ArgumentParser) -> None:
         choices=range(1, 61),
         dest="timeout",
     )
+    
+    generation_group.add_argument(
+        "--threads",
+        type=int,
+        help="Set the number of concurrent threads for model requests [default: 3]",
+        default=3,
+        metavar="NUM",
+        choices=range(1, 6),
+        dest="thread_count",
+    )
 
 
 def add_formatting_arguments(parser: argparse.ArgumentParser) -> None:
@@ -614,6 +627,7 @@ def create_config_from_args(args: argparse.Namespace) -> Config:
         fallback_timeout=args.timeout,
         attempt=args.attempts,
         model=model,
+        thread_count=args.thread_count,
     )
 
 

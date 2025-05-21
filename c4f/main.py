@@ -21,9 +21,10 @@ import concurrent.futures
 import os
 import re
 import sys
+import time
 from collections import defaultdict
 from collections.abc import Callable
-from concurrent.futures import TimeoutError  # noqa: A004
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError  # noqa: A004
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List, NoReturn, Optional, Tuple, TypeVar, cast
@@ -1014,10 +1015,10 @@ def model_prompt(
 def get_model_response(
     prompt: str, tool_calls: dict[str, Any], config: Config
 ) -> str | None:
-    """Get a response from the model.
+    """Get a response from the model using concurrent requests.
 
-    Makes an API call to the model with the given prompt and tool calls.
-    Handles errors and returns the model's response content.
+    Makes multiple concurrent API calls to the model with the given prompt and tool calls
+    using thread pooling. Returns the first successful response.
 
     Args:
         prompt: The prompt to send to the model.
@@ -1025,28 +1026,52 @@ def get_model_response(
         config: Configuration object with settings for the commit message generator.
 
     Returns:
-        Optional[str]: The model's response, or None if an error occurred.
+        Optional[str]: The first successful model response, or None if all attempts failed.
     """
-    try:
-        response = client.chat.completions.create(
-            model=config.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Follow instructions precisely and respond concisely.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            tool_calls=[tool_calls],  # Wrap in list as API expects array of tool calls
-        )
-        return (
-            response.choices[0].message.content
-            if response and response.choices
-            else None
-        )
-    except Exception as e:
-        console.print(f"[red]Error in model response: {e!s}[/red]")
-        return None
+    # The internal function to make a single model API call
+    def make_model_call(_) -> str | None:
+        try:
+            response = client.chat.completions.create(
+                model=config.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Follow instructions precisely and respond concisely.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                tool_calls=[tool_calls],  # Wrap in list as API expects array of tool calls
+            )
+            return (
+                response.choices[0].message.content
+                if response and response.choices
+                else None
+            )
+        except Exception as e:
+            console.print(f"[dim]Thread encountered error: {e!s}[/dim]")
+            return None
+
+    # Use ThreadPoolExecutor to make concurrent API calls
+    with ThreadPoolExecutor(max_workers=config.thread_count) as executor:
+        # Start multiple concurrent requests
+        futures = [executor.submit(make_model_call, i) for i in range(config.thread_count)]
+        
+        # Wait for the first successful result or until all fail
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                result = future.result()
+                if result:  # If we got a valid response
+                    # Cancel remaining futures
+                    for f in futures:
+                        if not f.done():
+                            f.cancel()
+                    return result
+            except Exception:
+                continue  # Skip failed futures
+    
+    # If all threads failed, report the error
+    console.print("[red]All model request threads failed[/red]")
+    return None
 
 
 def execute_with_progress(

@@ -33,6 +33,7 @@ class Config:
         diff_max_length: Maximum number of lines to include in diff snippets.
         model: The AI model to use for generating commit messages. Can be a g4f.Model object,
             a g4f.models enum value, or a string (which will be converted to a Model object).
+        thread_count: Number of concurrent threads to use for model requests.
     """
 
     # Default values
@@ -48,7 +49,8 @@ class Config:
     batch_size: int = 10
     batch_processing: bool = False
     parallel_processing: bool = False
-
+    thread_count: int = 3  # Default number of concurrent threads for model requests
+    
     # Validation constraints
     MIN_THRESHOLD: ClassVar[int] = 10
     MAX_THRESHOLD: ClassVar[int] = 500
@@ -57,6 +59,8 @@ class Config:
     MIN_ATTEMPTS: ClassVar[int] = 1
     MAX_ATTEMPTS: ClassVar[int] = 10
     MAX_WORKERS: ClassVar[int] = 10
+    MIN_THREADS: ClassVar[int] = 1
+    MAX_THREADS: ClassVar[int] = 5
 
     def __post_init__(self) -> None:
         """Validate configuration settings after initialization.
@@ -137,6 +141,11 @@ class Config:
                     or self.model in g4f.models.__dict__.values()
                 ),
                 "model must be a g4f.Model object, a valid model from g4f.models, or a string",
+            ),
+            (
+                not isinstance(self.thread_count, int)
+                or not self.MIN_THREADS <= self.thread_count <= self.MAX_THREADS,
+                f"thread_count must be an integer between {self.MIN_THREADS} and {self.MAX_THREADS}",
             ),
         ]
 
