@@ -48,7 +48,7 @@ def get_ascii_icon_for_type(change_type: Optional[str]) -> str:
         "ci": "[c]",
         "chore": "[.]",
         "revert": "[<]",
-        "security": "[#]"
+        "security": "[#]",
     }
     return ascii_icons.get(str(change_type), "[*]")  # Default icon if type not found
 
@@ -71,9 +71,9 @@ def has_utf8_locale() -> bool:
     Returns:
         bool: True if locale is UTF-8, False otherwise.
     """
-    locale = os.environ.get("LC_ALL",
-                            os.environ.get("LC_CTYPE",
-                                           os.environ.get("LANG", "")))
+    locale = os.environ.get(
+        "LC_ALL", os.environ.get("LC_CTYPE", os.environ.get("LANG", ""))
+    )
     return "utf-8" in locale.lower() or "utf8" in locale.lower()
 
 
@@ -88,6 +88,7 @@ def has_windows_utf8_support() -> bool:
 
     try:
         import ctypes
+
         kernel32 = ctypes.windll.kernel32
         # UTF-8 code page is 65001
         codepage = 65001
@@ -170,7 +171,7 @@ class Purify:
     @classmethod
     def _generate_introduction_prefixes(cls) -> list[str]:
         """Generate a comprehensive list of introductory prefixes to remove.
-        
+
         Returns:
             A list of prefix strings that should be removed from commit messages.
         """
@@ -180,25 +181,38 @@ class Purify:
         prefixes_to_remove.extend(cls._generate_combined_prefixes())
 
         # Add additional standalone prefixes
-        prefixes_to_remove.extend([
-            "proposed commit:",
-            "recommended commit:",
-            "for this commit:",
-            "as a commit message:",
-            "the commit message is:",
-        ])
+        prefixes_to_remove.extend(
+            [
+                "proposed commit:",
+                "recommended commit:",
+                "for this commit:",
+                "as a commit message:",
+                "the commit message is:",
+            ]
+        )
 
         return prefixes_to_remove
 
     @classmethod
     def _generate_combined_prefixes(cls) -> list[str]:
         """Generate combinations of base phrases and introductory phrases.
-        
+
         Returns:
             A list of combined prefix strings.
         """
-        base_phrases = ["commit message", "commit", "git commit message", "suggested commit message"]
-        intro_phrases = ["here's a", "here is the", "here is a", "i've created a", "i have created a"]
+        base_phrases = [
+            "commit message",
+            "commit",
+            "git commit message",
+            "suggested commit message",
+        ]
+        intro_phrases = [
+            "here's a",
+            "here is the",
+            "here is a",
+            "i've created a",
+            "i have created a",
+        ]
 
         combined_prefixes = []
 
@@ -215,11 +229,11 @@ class Purify:
     @staticmethod
     def _remove_matching_prefix(message: str, prefixes: list[str]) -> str:
         """Remove the first matching prefix from a message.
-        
+
         Args:
             message: The message to process.
             prefixes: List of prefixes to check for and remove.
-            
+
         Returns:
             The message with any matching prefix removed.
         """
@@ -227,7 +241,7 @@ class Purify:
 
         for prefix in prefixes:
             if message_lower.startswith(prefix):
-                return message[len(prefix):].strip()
+                return message[len(prefix) :].strip()
 
         return message
 
@@ -282,14 +296,14 @@ class Purify:
         filtered_lines = []
         for line in lines:
             if any(
-                    x in line.lower()
-                    for x in [
-                        "let me know if",
-                        "please review",
-                        "is this helpful",
-                        "hope this",
-                        "i've followed",
-                    ]
+                x in line.lower()
+                for x in [
+                    "let me know if",
+                    "please review",
+                    "is this helpful",
+                    "hope this",
+                    "i've followed",
+                ]
             ):
                 break
             filtered_lines.append(line)
@@ -328,7 +342,9 @@ class Purify:
         remaining_message = cls._extract_remaining_message(message)
         force_brackets = cls._should_force_brackets(config)
 
-        return cls._format_commit_message(commit_type, scope, remaining_message, force_brackets)
+        return cls._format_commit_message(
+            commit_type, scope, remaining_message, force_brackets
+        )
 
     @staticmethod
     def _is_valid_for_format_correction(message: str) -> bool:
@@ -377,14 +393,25 @@ class Purify:
             tuple: A tuple containing the commit type and scope if found, or (None, "") if not found.
         """
         commit_types = [
-            "feat", "fix", "docs", "style", "refactor",
-            "perf", "test", "build", "ci", "chore",
-            "revert", "security"
+            "feat",
+            "fix",
+            "docs",
+            "style",
+            "refactor",
+            "perf",
+            "test",
+            "build",
+            "ci",
+            "chore",
+            "revert",
+            "security",
         ]
 
         for commit_type in commit_types:
-            if first_part.lower().startswith(commit_type) and len(first_part) > len(commit_type):
-                scope = first_part[len(commit_type):]
+            if first_part.lower().startswith(commit_type) and len(first_part) > len(
+                commit_type
+            ):
+                scope = first_part[len(commit_type) :]
                 return commit_type, scope
 
         return None, ""
@@ -416,7 +443,9 @@ class Purify:
         return config.force_brackets if config else False
 
     @staticmethod
-    def _format_commit_message(commit_type: str, scope: str, remaining_message: str, force_brackets: bool) -> str:
+    def _format_commit_message(
+        commit_type: str, scope: str, remaining_message: str, force_brackets: bool
+    ) -> str:
         """Format the commit message with the given type, scope, and remaining message.
 
         Args:
@@ -468,10 +497,10 @@ class Purify:
     @staticmethod
     def _filter_characters(message: str) -> str:
         """Filter out control and broken characters while preserving important ones.
-        
+
         Args:
             message: The message to filter.
-            
+
         Returns:
             str: Message with only preserved characters.
         """
@@ -480,10 +509,10 @@ class Purify:
     @staticmethod
     def _should_preserve_char(char: str) -> bool:
         """Determine if a character should be preserved in the output.
-        
+
         Args:
             char: The character to check.
-            
+
         Returns:
             bool: True if the character should be preserved, False otherwise.
         """
@@ -492,11 +521,12 @@ class Purify:
             return True
 
         # Final check for punctuation and symbols
-        return (Purify._is_empty_or_whitespace_control(char)
-                or Purify._is_printable_ascii(char)
-                or Purify._is_in_preserve_ranges(char)
-                or Purify._is_punctuation_or_symbol(char)
-                )
+        return (
+            Purify._is_empty_or_whitespace_control(char)
+            or Purify._is_printable_ascii(char)
+            or Purify._is_in_preserve_ranges(char)
+            or Purify._is_punctuation_or_symbol(char)
+        )
 
     @staticmethod
     def _is_empty_or_whitespace_control(char: str) -> bool:
@@ -506,10 +536,10 @@ class Purify:
     @staticmethod
     def _is_printable_ascii(char: str) -> bool:
         """Check if character is in the printable ASCII range.
-        
+
         Args:
             char: The character to check.
-            
+
         Returns:
             bool: True if character is printable ASCII.
         """
@@ -522,10 +552,10 @@ class Purify:
     @staticmethod
     def _is_in_preserve_ranges(char: str) -> bool:
         """Check if character is in one of the preserved Unicode ranges.
-        
+
         Args:
             char: The character to check.
-            
+
         Returns:
             bool: True if character is in a preserved range.
         """
@@ -542,7 +572,7 @@ class Purify:
     @staticmethod
     def _get_preserve_ranges() -> list[tuple[int, int]]:
         """Get the Unicode ranges that should be preserved.
-        
+
         Returns:
             list: List of (start, end) tuples defining Unicode ranges to preserve.
         """
@@ -553,7 +583,6 @@ class Purify:
             (0x2700, 0x27BF),  # Dingbats
             (0x1F900, 0x1F9FF),  # Supplemental symbols and pictographs
             (0x1F1E6, 0x1F1FF),  # Regional indicator symbols (flags)
-
             # ASCII art and icon-like ranges
             (0x2500, 0x257F),  # Box drawing characters
             (0x2580, 0x259F),  # Block elements
@@ -574,7 +603,9 @@ class Purify:
         return re.sub(r"[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]", "", message)
 
     @classmethod
-    def message(cls, message: Optional[str], config: Optional[Config] = None) -> Optional[str]:
+    def message(
+        cls, message: Optional[str], config: Optional[Config] = None
+    ) -> Optional[str]:
         """Clean up the message from the chatbot to ensure it's a proper commit message.
 
         Args:
@@ -672,7 +703,9 @@ class Purify:
         if not config:
             return False
 
-        return (hasattr(config, "ascii_only") and config.ascii_only) or not can_display_emojis()
+        return (
+            hasattr(config, "ascii_only") and config.ascii_only
+        ) or not can_display_emojis()
 
     @classmethod
     def _replace_with_ascii_icons(cls, message: str) -> str:
@@ -699,10 +732,10 @@ class Purify:
     @staticmethod
     def extract_commit_type(message: str) -> Optional[str]:
         """Extract the commit type from a commit message.
-        
+
         Args:
             message: The commit message to analyze.
-            
+
         Returns:
             The extracted commit type, or None if no type could be found.
         """
@@ -724,33 +757,47 @@ class Purify:
     @staticmethod
     def _get_valid_commit_types() -> list[str]:
         """Get the list of valid conventional commit types."""
-        return ["feat", "fix", "docs", "style", "refactor", "perf",
-                "test", "build", "ci", "chore", "revert", "security"]
+        return [
+            "feat",
+            "fix",
+            "docs",
+            "style",
+            "refactor",
+            "perf",
+            "test",
+            "build",
+            "ci",
+            "chore",
+            "revert",
+            "security",
+        ]
 
     @staticmethod
     def _remove_emojis_from_message(message: str) -> str:
         """Remove emoji characters from the beginning of a message.
-        
+
         Args:
             message: The message to process.
-            
+
         Returns:
             The message with leading emojis removed.
         """
         return re.sub(
             r"^(\s*)([\u2700-\u27BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\U0001F1E0-\U0001F1FF])\s+",
-            r"\1", message)
+            r"\1",
+            message,
+        )
 
     @staticmethod
     def _extract_type_with_scope(message: str, valid_types: list[str]) -> Optional[str]:
         """Extract commit type from a message with potential scope format.
-        
+
         Looks for patterns like "feat(scope):" in the message.
-        
+
         Args:
             message: The message to analyze.
             valid_types: List of valid commit types to check against.
-            
+
         Returns:
             The extracted commit type if found and valid, otherwise None.
         """
@@ -760,15 +807,17 @@ class Purify:
         return None
 
     @staticmethod
-    def _extract_type_without_scope(message: str, valid_types: list[str]) -> Optional[str]:
+    def _extract_type_without_scope(
+        message: str, valid_types: list[str]
+    ) -> Optional[str]:
         """Extract commit type from a message without scope format.
-        
+
         Checks if the message starts with a valid type followed by a colon.
-        
+
         Args:
             message: The message to analyze.
             valid_types: List of valid commit types to check against.
-            
+
         Returns:
             The extracted commit type if found, otherwise None.
         """

@@ -485,7 +485,7 @@ def add_formatting_arguments(parser: argparse.ArgumentParser) -> None:
         help="Force conventional commit type with brackets (e.g., feat(scope): message)",
         dest="force_brackets",
     )
-    
+
     formatting_group.add_argument(
         "-i",
         "--icon",
@@ -493,7 +493,7 @@ def add_formatting_arguments(parser: argparse.ArgumentParser) -> None:
         help="Add emoji icons to commit messages (e.g., ✨ feat: new feature)",
         dest="icon",
     )
-    
+
     formatting_group.add_argument(
         "-A",
         "--ascii-only",

@@ -132,7 +132,10 @@ class Config:
                 "diff_max_length must be a non-negative integer",
             ),
             (
-                not (isinstance(self.model, g4f.Model | str) or self.model in g4f.models.__dict__.values()),
+                not (
+                    isinstance(self.model, g4f.Model | str)
+                    or self.model in g4f.models.__dict__.values()
+                ),
                 "model must be a g4f.Model object, a valid model from g4f.models, or a string",
             ),
         ]
