@@ -196,6 +196,7 @@ Key configuration options available through command-line arguments:
 | `--model`          | AI model to use                              | gpt-4-mini |
 | `--attempts`       | Number of message generation attempts        | 3          |
 | `--timeout`        | Timeout in seconds for AI response           | 10         |
+| `--threads`        | Number of concurrent threads for requests    | 3          |
 | `--force-brackets` | Force brackets in conventional format        | False      |
 | `--icon`           | Add emoji icons to commit messages           | False      |
 | `--ascii-only`     | Use ASCII alternatives instead of Unicode    | False      |
@@ -206,13 +207,29 @@ Key configuration options available through command-line arguments:
 We've extensively tested various G4F models to find the optimal balance between response quality and speed. Based on our testing, we recommend using one of the following models:
 
 - `gpt-4-mini` (default, reliable and fast)
-- `gpt-3-5-turbo` (good alternative)
+- `gpt-3.5-turbo` (good alternative)
 - `MetaAI` (good for general purpose commit messages)
 - `default` (balanced between quality and speed)
 
 ![G4F Models Performance Comparison](https://raw.githubusercontent.com/alaamer12/c4f/main/assets/model_response_times.png "Model Response Times Comparison")
 
 The chart above shows average response times for different models. As you can see, some models (like ARTA) have significantly longer response times, while others are much faster.
+
+### Concurrent Model Requests
+
+C4F implements a threading approach that sends multiple concurrent requests to the model and uses the first successful response. This significantly improves reliability and reduces wait times when dealing with potentially unstable free API endpoints.
+
+To adjust the number of concurrent threads:
+
+```bash
+c4f --threads 5  # Maximum concurrency (faster but more resource intensive)
+```
+
+or
+
+```bash
+c4f --threads 1  # Disable concurrency (slower but uses less resources)
+```
 
 ### Viewing Available Models
 
