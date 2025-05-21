@@ -29,7 +29,8 @@ import g4f  # type: ignore
 from rich.box import ASCII, ROUNDED, Box
 from rich.panel import Panel
 from rich.text import Text
-
+from rich.table import Table
+from c4f.utils import console
 from c4f.config import Config
 
 # Import main functionality here to avoid circular imports
@@ -430,7 +431,7 @@ def add_model_argument(parser: argparse.ArgumentParser) -> None:
         help="Set the AI model to use for commit message generation [default: gpt-4-mini]",
         default="gpt-4-mini",
         metavar="MODEL",
-        choices=["gpt-4-mini", "gpt-4", "gpt-3.5-turbo"],
+        choices=["gpt-4-mini", "gpt-4", "gpt-3.5-turbo", "MetaAI", "default"],
         dest="model",
     )
 
@@ -514,6 +515,19 @@ def add_all_arguments(parser: argparse.ArgumentParser) -> None:
     add_model_argument(parser)
     add_generation_arguments(parser)
     add_formatting_arguments(parser)
+    add_show_models_argument(parser)
+
+
+def add_show_models_argument(parser: argparse.ArgumentParser) -> None:
+    """Add a flag to display available models."""
+    # Add models command
+    parser.add_argument(
+        "--models",
+        action="store_true",
+        help="Display all available models and exit",
+        dest="show_models",
+    )
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -586,6 +600,9 @@ def create_config_from_args(args: argparse.Namespace) -> Config:
     model_mapping = {
         "gpt-4-mini": g4f.models.gpt_4o_mini,
         "gpt-4": g4f.models.gpt_4o,
+        "gpt-3.5-turbo": g4f.models.gpt_3_5_turbo,
+        "MetaAI": g4f.models.meta,
+        "default": g4f.models.default,
     }
 
     model = model_mapping.get(args.model, g4f.models.gpt_4o_mini)
@@ -598,6 +615,54 @@ def create_config_from_args(args: argparse.Namespace) -> Config:
         attempt=args.attempts,
         model=model,
     )
+
+
+def display_available_models() -> None:
+    """Display all available models from g4f in a formatted table, highlighting recommended ones."""
+    
+    models = [
+        'ARTA', 'Blackbox', 'ChatGLM', 'Chatai', 'DeepInfraChat', 'DocsBot', 
+        'Free2GPT', 'FreeGpt', 'ImageLabs', 'LambdaChat', 'Liaobots', 'MetaAI', 
+        'OIVSCodeSer0501', 'OIVSCodeSer2', 'OIVSCodeSer5', 'PollinationsAI', 
+        'PollinationsImage', 'PuterJS', 'TeachAnything', 'WeWordle', 'Yqcloud', 
+        'blackboxai', 'codestral', 'command', 'default', 'evil', 'flux', 
+        'grok', 'midjourney', 'o1', 'o3', 'sonar'
+    ]
+
+    # Add officially supported model names for display purposes
+    if 'gpt-4-mini' not in models:
+        models.append('gpt-4-mini')
+    if 'gpt-3.5-turbo' not in models:
+        models.append('gpt-3-5-turbo')
+
+    # Recommended models based on performance testing
+    recommended = {'gpt-4-mini', 'gpt-3-5-turbo', 'MetaAI', 'default'}
+
+    table = Table(title="Available G4F Models", box=determine_box_style())
+    table.add_column("Model", style="cyan", header_style="bold magenta")
+    table.add_column("Status", style="green")
+
+    # Sort models with recommended ones first
+    sorted_models = sorted(models, key=lambda m: (m.lower() not in [r.lower() for r in recommended], m.lower()))
+    
+    for model in sorted_models:
+        if model.lower() in [r.lower() for r in recommended]:
+            table.add_row(f"[bold green]{model}[/bold green]", "[yellow]Recommended[/yellow]")
+        else:
+            table.add_row(model, "")
+    
+    console.print("\n")
+    console.print(table)
+    console.print(
+        f"\nTotal available models: {len(models)} "
+        f"| [bold green]{len(recommended)} recommended[/bold green]"
+    )
+    
+    # Add warning about timeout handling
+    console.print("\n[yellow]⚠️ Warning:[/yellow] If models timeout frequently, try:")
+    console.print("  • Increasing timeout: [cyan]c4f --timeout 30[/cyan]")
+    console.print("  • Using a faster model: [cyan]c4f --model MetaAI[/cyan]")
+    console.print("  • Breaking large commits into smaller ones\n")
 
 
 def main() -> None:
@@ -615,6 +680,11 @@ def main() -> None:
 
     # Parse command line arguments
     args = parse_args()
+    
+    # Check if we should display models
+    if hasattr(args, 'show_models') and args.show_models:
+        display_available_models()
+        return
 
     # Create configuration from arguments
     config = create_config_from_args(args)
