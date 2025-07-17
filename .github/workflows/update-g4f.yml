@@ -89,23 +89,23 @@ jobs:
         if: steps.check-version.outputs.needs_update == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_GITHUB }}  # ✅ Use personal access token instead of GITHUB_TOKEN
           commit-message: "chore(deps): update g4f from ${{ steps.check-version.outputs.current_version }} to ${{ steps.check-version.outputs.latest_version }}"
           branch: "deps/update-g4f"
           delete-branch: true
           title: "chore(deps): update g4f from ${{ steps.check-version.outputs.current_version }} to ${{ steps.check-version.outputs.latest_version }}"
           body: |
             ## Dependency Update
-            
-            This PR updates the g4f dependency from version ${{ steps.check-version.outputs.current_version }} to ${{ steps.check-version.outputs.latest_version }}.
-            
+
+            This PR updates the `g4f` dependency from version `${{ steps.check-version.outputs.current_version }}` to `${{ steps.check-version.outputs.latest_version }}`.
+
             ### Changes in g4f
             - Please review the [g4f changelog](https://github.com/xtekky/gpt4free/blob/main/CHANGELOG.md) for detailed changes
-            
+
             ### Verification
             - ✅ All tests have passed with the updated dependency
-            - 📦 The dependency has been successfully updated in pyproject.toml
-            
+            - 📦 The dependency has been successfully updated in `pyproject.toml`
+
             This PR was created automatically by the g4f update workflow.
           labels: |
             dependencies
