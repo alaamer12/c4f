@@ -613,7 +613,6 @@ def create_config_from_args(args: argparse.Namespace) -> Config:
     model_mapping = {
         "gpt-4-mini": g4f.models.gpt_4o_mini,
         "gpt-4": g4f.models.gpt_4o,
-        "gpt-3.5-turbo": g4f.models.gpt_3_5_turbo,
         "MetaAI": g4f.models.meta,
         "default": g4f.models.default,
     }
