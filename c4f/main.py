@@ -43,6 +43,7 @@ from rich.table import Table
 
 from c4f._purifier import Purify, can_display_emojis, get_ascii_icon_for_type
 from c4f.config import Config
+from c4f.ssl_utils import with_ssl_workaround
 from c4f.utils import (  # type: ignore
     STATUS_TYPE,
     FileChange,
@@ -1012,6 +1013,7 @@ def model_prompt(
     return execute_with_progress(get_model_response, prompt, tool_calls, config)
 
 
+@with_ssl_workaround
 def get_model_response(
     prompt: str, tool_calls: dict[str, Any], config: Config
 ) -> str | None:
@@ -1019,6 +1021,9 @@ def get_model_response(
 
     Makes multiple concurrent API calls to the model with the given prompt and tool calls
     using thread pooling. Returns the first successful response.
+    
+    This function is decorated with the SSL workaround to handle legacy SSL renegotiation issues
+    that may occur when connecting to certain APIs.
 
     Args:
         prompt: The prompt to send to the model.
@@ -1048,7 +1053,17 @@ def get_model_response(
                 else None
             )
         except Exception as e:
-            console.print(f"[dim]Thread encountered error: {e!s}[/dim]")
+            # Provide more detailed error message for SSL errors
+            if "SSL" in str(e) and "UNSAFE_LEGACY_RENEGOTIATION_DISABLED" in str(e):
+                console.print(
+                    "⚠️ "
+                    f"[yellow]SSL renegotiation error encountered with API. "
+                    f"SSL workaround was applied but the issue persists. "
+                    f"This might be due to server-side configuration.[/yellow]\n"
+                    "[bold orange]🔁 Try to run again[/bold orange]"
+                )
+            else:
+                console.print(f"[dim]Thread encountered error: {e!s}[/dim]")
             return None
 
     # Use ThreadPoolExecutor to make concurrent API calls

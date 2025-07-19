@@ -98,6 +98,7 @@ __maintainer__ = "Alaamer"
 __maintainer_email__ = "ahmedmuhamed12@gmail.com"
 
 from .cli import run_main as main
+from .ssl_utils import with_ssl_workaround
 
 __all__ = [
     "__author__",
@@ -118,4 +119,5 @@ __all__ = [
     "__status__",
     "__version__",
     "main",
+    "with_ssl_workaround",
 ]
