@@ -22,6 +22,7 @@ wheels/
 
 # Virtual Environment
 .env
+.pypi-token
 .venv
 env/
 venv/
