@@ -41,11 +41,11 @@ class Config:
     icon: bool = False
     ascii_only: bool = False
     prompt_threshold: int = 80
-    fallback_timeout: float = 15.0
+    fallback_timeout: float = 45.0
     min_comprehensive_length: int = 50
     attempt: int = 3
     diff_max_length: int = 100
-    model: MODEL_TYPE = field(default=g4f.models.gpt_4o_mini)
+    model: MODEL_TYPE = field(default=g4f.models.default)
     batch_size: int = 10
     batch_processing: bool = False
     parallel_processing: bool = False

@@ -431,10 +431,10 @@ def add_model_argument(parser: argparse.ArgumentParser) -> None:
         "-m",
         "--model",
         type=str,
-        help="Set the AI model to use for commit message generation [default: gpt-4-mini]",
-        default="gpt-4-mini",
+        help="Set the AI model to use for commit message generation [default: default]",
+        default="default",
         metavar="MODEL",
-        choices=["gpt-4-mini", "gpt-4", "gpt-3.5-turbo", "MetaAI", "default"],
+        choices=["default", "MetaAI", "gpt-4-mini", "gpt-4"],
         dest="model",
     )
 
@@ -611,13 +611,26 @@ def create_config_from_args(args: argparse.Namespace) -> Config:
     """
     # Convert string model name to g4f model object
     model_mapping = {
+        "default": g4f.models.default,
+        "MetaAI": g4f.models.meta,
         "gpt-4-mini": g4f.models.gpt_4o_mini,
         "gpt-4": g4f.models.gpt_4o,
-        "MetaAI": g4f.models.meta,
-        "default": g4f.models.default,
     }
 
-    model = model_mapping.get(args.model, g4f.models.gpt_4o_mini)
+    # Warn about login-required models
+    login_required_models = ["gpt-4-mini", "gpt-4"]
+    if args.model in login_required_models:
+        console.print(
+            f"[yellow]⚠️  Warning: Model '{args.model}' may require login and could show 'Login to continue using' messages.[/yellow]"
+        )
+        console.print(
+            f"[cyan]💡 Recommended alternatives: --model default or --model MetaAI[/cyan]"
+        )
+        console.print(
+            f"[dim]🔧 We're working on fixing login-required models in future updates.[/dim]\n"
+        )
+
+    model = model_mapping.get(args.model, g4f.models.default)
 
     return Config(
         force_brackets=args.force_brackets,
@@ -648,8 +661,9 @@ def display_available_models() -> None:
     if 'gpt-3.5-turbo' not in models:
         models.append('gpt-3-5-turbo')
 
-    # Recommended models based on performance testing
-    recommended = {'gpt-4-mini', 'gpt-3-5-turbo', 'MetaAI', 'default'}
+    # Recommended models based on performance testing and availability
+    recommended = {'default', 'MetaAI'}
+    login_required = {'gpt-4-mini', 'gpt-3-5-turbo', 'gpt-4'}
 
     table = Table(title="Available G4F Models", box=determine_box_style())
     table.add_column("Model", style="cyan", header_style="bold magenta")
@@ -660,7 +674,9 @@ def display_available_models() -> None:
     
     for model in sorted_models:
         if model.lower() in [r.lower() for r in recommended]:
-            table.add_row(f"[bold green]{model}[/bold green]", "[yellow]Recommended[/yellow]")
+            table.add_row(f"[bold green]{model}[/bold green]", "[green]✅ Working[/green]")
+        elif model.lower() in [r.lower() for r in login_required]:
+            table.add_row(f"[dim]{model}[/dim]", "[red]⚠️  Login Required[/red]")
         else:
             table.add_row(model, "")
     
@@ -668,14 +684,17 @@ def display_available_models() -> None:
     console.print(table)
     console.print(
         f"\nTotal available models: {len(models)} "
-        f"| [bold green]{len(recommended)} recommended[/bold green]"
+        f"| [bold green]{len(recommended)} working without login[/bold green] "
+        f"| [red]{len(login_required)} require login[/red]"
     )
     
-    # Add warning about timeout handling
-    console.print("\n[yellow]⚠️ Warning:[/yellow] If models timeout frequently, try:")
-    console.print("  • Increasing timeout: [cyan]c4f --timeout 30[/cyan]")
-    console.print("  • Using a faster model: [cyan]c4f --model MetaAI[/cyan]")
-    console.print("  • Breaking large commits into smaller ones\n")
+    # Add usage recommendations
+    console.print("\n[green]💡 Recommendations:[/green]")
+    console.print("  • Use working models: [cyan]c4f --model default[/cyan] or [cyan]c4f --model MetaAI[/cyan]")
+    console.print("  • If models timeout: [cyan]c4f --timeout 30[/cyan]")
+    console.print("  • For large commits: break into smaller ones")
+    console.print("\n[yellow]⚠️  Note:[/yellow] Models marked as 'Login Required' may show authentication errors.")
+    console.print("[dim]🔧 We're working on fixing login-required models in future updates.[/dim]\n")
 
 
 def main() -> None:
